@@ -31,7 +31,6 @@ export function answerQuery(kind: string, o: { workerIds: string[] | null; date:
     case "payout_summary": {
       if (txs.length === 0 && pending.length === 0 && review.length === 0) return "There are no payouts for this period yet.";
       const parts = [`${by("completed").length} completed`, `${by("processing").length} processing`, `${by("failed").length} failed`];
-      if (by("unclaimed").length) parts.push(`${by("unclaimed").length} waiting for the recipient to sign up to PayPal`);
       const extra = [pending.length ? `${pending.length} awaiting approval` : "", review.length ? `${review.length} need review` : ""].filter(Boolean);
       return `This period: ${parts.join(", ")}${extra.length ? `, and ${extra.join(" and ")}` : ""}.`;
     }
@@ -43,9 +42,7 @@ export function answerQuery(kind: string, o: { workerIds: string[] | null; date:
       return `${plural(by("completed").length, "payment")} completed.`;
     case "processing_payments": {
       const p = by("processing");
-      const u = by("unclaimed");
-      const unclaimed = u.length ? ` ${plural(u.length, "payment")} waiting for the recipient to sign up to PayPal: ${some(u.map((t) => nameOf(t.workerId)))}.` : "";
-      return p.length ? `${plural(p.length, "payment")} still processing: ${some(p.map((t) => nameOf(t.workerId)))}.${unclaimed}` : u.length ? unclaimed.trim() : "Nothing is processing.";
+      return p.length ? `${plural(p.length, "payment")} still processing: ${some(p.map((t) => nameOf(t.workerId)))}.` : "Nothing is processing.";
     }
     case "pending_payouts": {
       const proc = by("processing");

@@ -10,7 +10,10 @@ export type Resolution =
   | { kind: "clarify"; question: string; stepIndex: number }
   | { kind: "reject"; reason: string };
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { UPI_ID } from "@/app/lib/cashfree/payouts";
+
+/** Speech-to-text writes "ravi at okicici" or "ravi dot k at oksbi": turn that back into a UPI id. */
+const spokenUpi = (v: string) => v.trim().toLowerCase().replace(/\s+at\s+/g, "@").replace(/\s+dot\s+/g, ".").replace(/\s+/g, "");
 
 /** Structural check of the planner's selector object. */
 export function cleanSelector(v: unknown): Selector | null {
@@ -62,8 +65,10 @@ function coerce(slot: SlotDef, v: unknown): { value: unknown } | { missing: true
       if ((slot.min !== undefined && n < slot.min) || (slot.max !== undefined && n > slot.max)) return { error: "That number doesn't look right." };
       return { value: n };
     }
-    case "email":
-      return EMAIL.test(String(v).trim()) ? { value: String(v).trim() } : { error: "That email doesn't look valid." };
+    case "upi": {
+      const upi = spokenUpi(String(v));
+      return UPI_ID.test(upi) ? { value: upi } : { error: "That UPI ID doesn't look valid." };
+    }
     case "string":
       return String(v).trim() ? { value: String(v).trim().slice(0, 120) } : { missing: true };
     default:
@@ -119,7 +124,7 @@ export function resolveSteps(raw: RawStep[]): Resolution {
       }
       const c = coerce(slot, args[key]);
       if ("error" in c) {
-        if (slot.type === "email") return { kind: "clarify", question: `${c.error} ${slot.ask ?? "Could you say it again?"}`, stepIndex: i };
+        if (slot.type === "upi") return { kind: "clarify", question: `${c.error} ${slot.ask ?? "Could you say it again?"}`, stepIndex: i };
         return { kind: "reject", reason: c.error };
       }
       if ("missing" in c) {
@@ -141,8 +146,10 @@ export function resolveSteps(raw: RawStep[]): Resolution {
         if (!Number.isFinite(n) || n <= 0 || n > 100000) return { kind: "clarify", question: "What daily wage in rupees?", stepIndex: i };
         resolved.value = String(n);
         vars.value = `₹${n}`;
-      } else if (field === "payoutEmail") {
-        if (!EMAIL.test(value)) return { kind: "clarify", question: "That email doesn't look valid. What is the PayPal email?", stepIndex: i };
+      } else if (field === "payoutUpi") {
+        const upi = spokenUpi(value);
+        if (!UPI_ID.test(upi)) return { kind: "clarify", question: "That UPI ID doesn't look valid. What is it, like name at bank?", stepIndex: i };
+        resolved.value = upi;
       } else if (field === "status") {
         const v = value.toLowerCase();
         if (!["active", "inactive"].includes(v)) return { kind: "clarify", question: "Should the worker be active or inactive?", stepIndex: i };

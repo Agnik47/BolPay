@@ -7,8 +7,8 @@ export interface Worker {
   /** City the worker operates in (used by voice/batch filters). */
   city: string;
   phone: string;
-  /** PayPal account used for payouts. Empty = payouts will fail. */
-  payoutEmail: string;
+  /** UPI id (name@bank) that payouts are sent to. Empty = payouts will fail. */
+  payoutUpi: string;
   dailyWage: number;
   joinedOn: string; // YYYY-MM-DD
   status: WorkerStatus;
@@ -93,29 +93,24 @@ export interface Payout {
   decidedAt?: string;
 }
 
-/** "unclaimed": PayPal accepted the payout but the recipient has no PayPal account yet (they get a sign-up link). */
-export type TransactionStatus = "processing" | "unclaimed" | "completed" | "failed";
+export type TransactionStatus = "processing" | "completed" | "failed";
 
 export interface Transaction {
   id: string;
   payoutId: string;
   workerId: string;
   periodLabel: string;
-  /** Amount in the app's display currency (INR). */
+  /** Amount in INR, which is also what Cashfree pays out. */
   amount: number;
-  /** Amount actually sent to PayPal (USD in the sandbox) and the rate used. */
-  usdAmount?: number;
-  fxRate?: number;
   status: TransactionStatus;
   createdAt: string; // ISO
+  /** Bank UTR once Cashfree has one, otherwise Cashfree's transfer id. */
   reference: string;
   failureReason?: string;
-  /** PayPal payout batch this transaction was submitted in (absent until submitted). */
-  batchId?: string;
+  /** Cashfree transfer_id of the current attempt (absent until submitted). */
+  transferId?: string;
   /** How many times this payout has been submitted (retries increment it). */
   attempt?: number;
-  /** PayPal's id for this payout item; needed to cancel an unclaimed payment. */
-  paypalItemId?: string;
-  /** Explains a state that isn't final, e.g. why a payment is waiting for the recipient. */
-  note?: string;
+  /** Cashfree's own id for the transfer. */
+  cfTransferId?: string;
 }

@@ -13,7 +13,7 @@
     "failed_payments": "which payments failed and why",
     "pending_payouts": "payouts waiting for approval and payments still processing",
     "completed_payments": "payments that completed",
-    "processing_payments": "payments still being processed by PayPal",
+    "processing_payments": "payments still being processed by Cashfree",
     "needs_review": "workers flagged Needs Review and the reasons",
     "missing_attendance": "workers with no attendance record on a date (default today)",
     "attendance_summary": "how many present, half day, absent and on leave on a date",
@@ -245,7 +245,7 @@
       ]
     },
     "approve_payouts": {
-      "description": "Approve pending payouts and send them to PayPal. Omit workers for every pending payout. Moves money.",
+      "description": "Approve pending payouts and send them to Cashfree. Omit workers for every pending payout. Moves money.",
       "risk": "money",
       "slots": {
         "workers": {
@@ -346,10 +346,10 @@
       ]
     },
     "sync_status": {
-      "description": "Refresh payment statuses from PayPal.",
+      "description": "Refresh payment statuses from Cashfree.",
       "risk": "read",
       "slots": {},
-      "summary": "Refresh payment statuses from PayPal",
+      "summary": "Refresh payment statuses from Cashfree",
       "examples": [
         {
           "say": "refresh the payment status",
@@ -376,14 +376,14 @@
           "type": "enum",
           "values": [
             "dailyWage",
-            "payoutEmail",
+            "payoutUpi",
             "city",
             "role",
             "phone",
             "status"
           ],
           "required": true,
-          "ask": "What should I change: wage, PayPal email, city, role, phone or status?"
+          "ask": "What should I change: wage, UPI ID, city, role, phone or status?"
         },
         "value": {
           "type": "string",
@@ -455,8 +455,8 @@
           "max": 100000,
           "ask": "What is their daily wage in rupees?"
         },
-        "payoutEmail": {
-          "type": "email",
+        "payoutUpi": {
+          "type": "upi",
           "required": false
         }
       },

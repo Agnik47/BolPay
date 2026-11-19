@@ -1,8 +1,6 @@
 import "server-only";
-import { createHash } from "node:crypto";
 import { calculatePay } from "@/app/lib/merchant/incentives";
 import { dateRange, formatDate } from "@/app/lib/merchant/format";
-import { DEFAULT_INR_PER_USD } from "@/app/lib/merchant/mock-data";
 import { getPeriod, getToday } from "@/app/lib/server/context";
 import type {
   AttendanceRecord,
@@ -12,8 +10,8 @@ import type {
   Transaction,
   Worker,
 } from "@/app/lib/merchant/types";
-import { cancelPayoutItem, createPayoutBatch, getPayoutBatch, mapTransactionStatus } from "@/app/lib/paypal/payouts";
-import { isLivePayPal, PayPalError } from "@/app/lib/paypal/rest";
+import { createTransfer, getTransfer, transferIdFor, UPI_ID } from "@/app/lib/cashfree/payouts";
+import { CashfreeError, isLiveCashfree } from "@/app/lib/cashfree/rest";
 import { parseCsv } from "./csv";
 import { getDb, logAudit, saveDb, WORKSPACES } from "./db";
 
@@ -26,9 +24,8 @@ export class ServiceError extends Error {
   }
 }
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STATUSES: AttendanceStatus[] = ["present", "half", "absent", "leave"];
-const MAX_BATCH = 100;
+const SUBMIT_CONCURRENCY = 5;
 
 const str = (v: unknown, max = 120) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const num = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN);
@@ -45,17 +42,17 @@ function buildWorker(input: Record<string, unknown>): Worker {
   const name = str(input.name, 80);
   const role = str(input.role, 80);
   const dailyWage = num(input.dailyWage);
-  const payoutEmail = str(input.payoutEmail);
+  const payoutUpi = str(input.payoutUpi).toLowerCase();
   if (!name || !role) throw new ServiceError("Name and role are required");
   if (!Number.isFinite(dailyWage) || dailyWage <= 0 || dailyWage > 100_000) throw new ServiceError("Daily wage must be a positive number");
-  if (payoutEmail && !EMAIL.test(payoutEmail)) throw new ServiceError("PayPal email is not valid");
+  if (payoutUpi && !UPI_ID.test(payoutUpi)) throw new ServiceError("UPI ID is not valid (expected name@bank)");
   return {
     id: `w${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
     name,
     role,
     city: str(input.city, 60) || "Bengaluru",
     phone: str(input.phone, 40),
-    payoutEmail,
+    payoutUpi,
     dailyWage,
     joinedOn: getToday(),
     status: "active",
@@ -88,10 +85,10 @@ export function updateWorker(id: string, patch: Record<string, unknown>) {
     w.city = v;
   }
   if ("phone" in patch) w.phone = str(patch.phone, 40);
-  if ("payoutEmail" in patch) {
-    const v = str(patch.payoutEmail);
-    if (v && !EMAIL.test(v)) throw new ServiceError("PayPal email is not valid");
-    w.payoutEmail = v;
+  if ("payoutUpi" in patch) {
+    const v = str(patch.payoutUpi).toLowerCase();
+    if (v && !UPI_ID.test(v)) throw new ServiceError("UPI ID is not valid (expected name@bank)");
+    w.payoutUpi = v;
   }
   if ("dailyWage" in patch) {
     const v = num(patch.dailyWage);
@@ -271,7 +268,7 @@ export function submitPeriod(filter: PrepareFilter = {}): { created: number; nee
   return { created: created.length - needsReview, needsReview, skipped };
 }
 
-/** Approve or reject pending payouts. Approving starts the PayPal transfers. */
+/** Approve or reject pending payouts. Approving starts the Cashfree transfers. */
 export async function decidePayouts(ids: string[], decision: "approved" | "rejected") {
   const db = getDb();
   const now = new Date().toISOString();
@@ -301,7 +298,7 @@ export async function decidePayouts(ids: string[], decision: "approved" | "rejec
   db.transactions.push(...txs);
   logAudit(`payout.${decision}`, `${pending.length} payout(s): ${pending.map((p) => p.id).join(', ')}`);
   saveDb();
-  if (txs.length) await submitToPayPal(txs.map((t) => t.id));
+  if (txs.length) await submitToCashfree(txs.map((t) => t.id));
 }
 
 export async function retryTransaction(id: string) {
@@ -311,13 +308,12 @@ export async function retryTransaction(id: string) {
   if (tx.status !== "failed") throw new ServiceError("Only failed transactions can be retried", 409);
   tx.status = "processing";
   tx.failureReason = undefined;
-  tx.note = undefined;
-  tx.paypalItemId = undefined;
+  tx.cfTransferId = undefined;
+  tx.transferId = undefined;
   tx.reference = "Submitting…";
-  tx.batchId = undefined;
   tx.attempt = (tx.attempt ?? 1) + 1;
   saveDb();
-  await submitToPayPal([tx.id]);
+  await submitToCashfree([tx.id]);
 }
 
 function fail(tx: Transaction, reason: string) {
@@ -326,124 +322,84 @@ function fail(tx: Transaction, reason: string) {
   if (tx.reference === "Submitting…") tx.reference = "—";
 }
 
-/** Currency PayPal is paid in and the rate from the stored INR amounts (1 when paying in INR). */
-export function settlement() {
-  const currency = process.env.PAYOUT_CURRENCY || "USD";
-  const rate = currency === "INR" ? 1 : Number(process.env.INR_PER_USD) || DEFAULT_INR_PER_USD;
-  return { currency, rate };
-}
-
-/** Sends the given transactions to PayPal using only amounts and emails stored on the server. */
-async function submitToPayPal(txIds: string[]) {
+/** Sends the given transactions to Cashfree using only amounts and UPI ids stored on the server. */
+async function submitToCashfree(txIds: string[]) {
   const db = getDb();
-  // Amounts are stored in INR; PayPal settles in `currency` at this rate (1 when paying in INR).
-  const { currency, rate } = settlement();
   const txs = db.transactions.filter((t) => txIds.includes(t.id));
 
-  if (isLivePayPal && process.env.ALLOW_LIVE_PAYOUTS !== "true") {
+  if (isLiveCashfree && process.env.ALLOW_LIVE_PAYOUTS !== "true") {
     txs.forEach((t) => fail(t, "Live payouts are disabled (set ALLOW_LIVE_PAYOUTS=true)"));
     saveDb();
     return;
   }
 
-  const sendable: { tx: Transaction; email: string }[] = [];
+  const sendable: { tx: Transaction; worker: Worker }[] = [];
   for (const tx of txs) {
-    const email = db.workers.find((w) => w.id === tx.workerId)?.payoutEmail ?? "";
-    if (!EMAIL.test(email)) fail(tx, "Worker has no valid PayPal account on file");
-    else if (!(tx.amount > 0) || !(Math.round((tx.amount / rate) * 100) > 0)) fail(tx, "Invalid payout amount");
+    const worker = db.workers.find((w) => w.id === tx.workerId);
+    if (!worker || !UPI_ID.test(worker.payoutUpi)) fail(tx, "Worker has no valid UPI ID on file");
+    else if (!(tx.amount >= 1)) fail(tx, "Payout is below the ₹1 minimum");
     else {
-      tx.fxRate = rate;
-      tx.usdAmount = Math.round((tx.amount / rate) * 100) / 100;
-      sendable.push({ tx, email });
+      // Same payout + same attempt = same transfer_id, so Cashfree dedupes a repeated submission.
+      tx.transferId = transferIdFor(db.batchSalt ?? "", tx.payoutId, tx.attempt ?? 1);
+      sendable.push({ tx, worker });
     }
   }
+  saveDb();
 
-  for (let i = 0; i < sendable.length; i += MAX_BATCH) {
-    const chunk = sendable.slice(i, i + MAX_BATCH);
-    const attempt = Math.max(...chunk.map((c) => c.tx.attempt ?? 1));
-    // Same payouts + same attempt = same id, so PayPal dedupes a repeated submission.
-    const digest = createHash("sha256").update((db.batchSalt ?? "") + chunk.map((c) => c.tx.payoutId).sort().join("|")).digest("hex").slice(0, 32);
-    const senderBatchId = `bolpay-${digest}-${attempt}`;
-    try {
-      const { batchId } = await createPayoutBatch({
-        senderBatchId,
-        currency,
-        items: chunk.map((c) => ({ payoutId: c.tx.payoutId, email: c.email, amount: c.tx.usdAmount ?? c.tx.amount })),
-      });
-      chunk.forEach((c) => (c.tx.batchId = batchId));
-    } catch (err) {
-      console.error("PayPal payout submission failed", err);
-      const detail = err instanceof PayPalError ? err.message : "Unexpected error";
-      chunk.forEach((c) => fail(c.tx, `PayPal rejected the batch: ${detail}`));
-    }
+  for (let i = 0; i < sendable.length; i += SUBMIT_CONCURRENCY) {
+    await Promise.all(
+      sendable.slice(i, i + SUBMIT_CONCURRENCY).map(async ({ tx, worker }) => {
+        try {
+          const r = await createTransfer({ transferId: tx.transferId!, workerId: worker.id, name: worker.name, phone: worker.phone, upi: worker.payoutUpi, amount: tx.amount });
+          applyTransferResult(tx, r.status, { cfTransferId: r.cfTransferId, utr: r.utr, error: r.error });
+        } catch (err) {
+          console.error("Cashfree transfer failed", err);
+          const detail = err instanceof CashfreeError ? err.message : "Unexpected error";
+          fail(tx, `Cashfree rejected the transfer: ${detail}`);
+        }
+      }),
+    );
   }
   saveDb();
 }
 
-/** Pulls live item statuses from PayPal for every batch that still has processing items. */
+/** Pulls live transfer statuses from Cashfree for every transaction that is still processing. */
 export async function syncTransactions() {
   const db = getDb();
-  const batchIds = [...new Set(db.transactions.filter((t) => (t.status === "processing" || t.status === "unclaimed") && t.batchId).map((t) => t.batchId!))];
-  for (const batchId of batchIds) {
-    try {
-      const batch = await getPayoutBatch(batchId);
-      for (const item of batch.items) {
-        const tx = db.transactions.find((t) => t.payoutId === item.payoutId && t.batchId === batchId);
-        if (tx) applyItemStatus(tx, item.status, item.paypalItemId, item.error);
-      }
-    } catch (err) {
-      console.error(`Could not sync PayPal batch ${batchId}`, err);
-    }
+  const open = db.transactions.filter((t) => t.status === "processing" && t.transferId);
+  for (let i = 0; i < open.length; i += SUBMIT_CONCURRENCY) {
+    await Promise.all(
+      open.slice(i, i + SUBMIT_CONCURRENCY).map(async (tx) => {
+        try {
+          const r = await getTransfer(tx.transferId!);
+          applyTransferResult(tx, r.status, { cfTransferId: r.cfTransferId, utr: r.utr, error: r.error });
+        } catch (err) {
+          console.error(`Could not sync Cashfree transfer ${tx.transferId}`, err);
+        }
+      }),
+    );
   }
   saveDb();
 }
 
-function applyItemStatus(tx: Transaction, status: Transaction["status"], paypalItemId?: string, error?: string) {
-  if (paypalItemId) {
-    tx.reference = paypalItemId;
-    tx.paypalItemId = paypalItemId;
-  }
+function applyTransferResult(tx: Transaction, status: Transaction["status"], info: { cfTransferId?: string; utr?: string; error?: string }) {
+  if (info.cfTransferId) tx.cfTransferId = info.cfTransferId;
+  const ref = info.utr || info.cfTransferId;
+  if (ref) tx.reference = ref;
   tx.status = status;
-  tx.failureReason = status === "failed" ? (error ?? "Payment failed") : undefined;
-  tx.note = status === "unclaimed" ? UNCLAIMED_NOTE : undefined;
-}
-
-const UNCLAIMED_NOTE =
-  "The recipient has no PayPal account for this email. PayPal sent them a sign-up link. It completes when they claim it; after 30 days unclaimed money returns to you. You can cancel and refund it now.";
-
-/** Cancels a payment that is waiting for the recipient to sign up, returning the money to your PayPal balance. */
-export async function cancelUnclaimed(id: string) {
-  const db = getDb();
-  const tx = db.transactions.find((t) => t.id === id);
-  if (!tx) throw new ServiceError("Transaction not found", 404);
-  if (tx.status !== "unclaimed" || !tx.paypalItemId) throw new ServiceError("Only a payment waiting for the recipient to sign up to PayPal can be cancelled", 409);
-  try {
-    await cancelPayoutItem(tx.paypalItemId);
-  } catch (err) {
-    const msg = err instanceof PayPalError ? err.message : "";
-    // PayPal only allows this once the whole batch has finished processing.
-    if (/Processed status/i.test(msg)) throw new ServiceError("PayPal is still finishing this batch. Try again in a minute.", 409);
-    // The PayPal sandbox answers this call with an internal error even for valid unclaimed items.
-    if (err instanceof PayPalError && err.status >= 500) throw new ServiceError(`PayPal could not cancel this payment right now${err.debugId ? ` (reference ${err.debugId})` : ""}. Unclaimed money returns to you automatically after 30 days.`, 502);
-    throw new ServiceError(msg ? `PayPal: ${msg}` : "Could not cancel the payment", 502);
-  }
-  tx.status = "failed";
-  tx.note = undefined;
-  tx.failureReason = "Cancelled by you. The money was returned to your PayPal balance. Fix the PayPal email, then Retry.";
-  logAudit("payout.cancel_unclaimed", tx.id);
-  saveDb();
+  tx.failureReason = status === "failed" ? (info.error ?? "Payment failed") : undefined;
 }
 
 /**
- * Applies a verified PAYMENT.PAYOUTS-ITEM.* webhook event. PayPal's call carries no signed-in user, so it
- * searches every dataset: a payout from the Zoho data must update even while people are viewing the demo.
- * Payout ids include the period id, which differs per dataset, so a match is unambiguous.
+ * Applies a verified TRANSFER_* webhook event. Cashfree's call carries no signed-in user, so it searches
+ * every dataset: a payout from the Zoho data must update even while people are viewing the demo.
+ * Transfer ids derive from the payout id (which includes the period id), so a match is unambiguous.
  */
-export function applyWebhookItem(item: { payoutId: string; transactionStatus?: string; paypalItemId?: string; error?: string }) {
+export function applyWebhookTransfer(item: { transferId: string; status: Transaction["status"]; cfTransferId?: string; utr?: string; error?: string }) {
   for (const ws of WORKSPACES) {
-    const tx = getDb(ws).transactions.find((t) => t.payoutId === item.payoutId);
+    const tx = getDb(ws).transactions.find((t) => t.transferId === item.transferId);
     if (!tx) continue;
-    applyItemStatus(tx, mapTransactionStatus(item.transactionStatus), item.paypalItemId, item.error);
+    applyTransferResult(tx, item.status, item);
     saveDb(ws);
     return true;
   }
@@ -467,7 +423,7 @@ function rowsOf(csv: string) {
 
 const normName = (s: string) => s.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
 
-/** Columns: name, role, city, phone, payoutEmail (or email), dailyWage (or wage). Duplicates (same name + city) are skipped. */
+/** Columns: name, role, city, phone, payoutUpi (or upi), dailyWage (or wage). Duplicates (same name + city) are skipped. */
 export function importWorkers(csv: string): ImportResult {
   const db = getDb();
   const errors: string[] = [];
@@ -480,7 +436,7 @@ export function importWorkers(csv: string): ImportResult {
         role: r.role || "Delivery Rider",
         city: r.city,
         phone: r.phone,
-        payoutEmail: r.payoutemail ?? r.email,
+        payoutUpi: r.payoutupi ?? r.upi,
         dailyWage: r.dailywage ?? r.wage,
       });
       if (db.workers.some((x) => normName(x.name) === normName(w.name) && normCity(x.city) === normCity(w.city))) {

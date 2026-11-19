@@ -26,7 +26,7 @@ function useErrorToasts() {
   }, [error, dismissError, toast]);
 }
 
-/** Announces PayPal payments that complete, fail or wait for a sign-up, whether from polling, an approval or a voice flow. */
+/** Announces Cashfree payments that complete or fail, whether from polling, an approval or a voice flow. */
 function usePaymentAlerts() {
   const { transactions, loaded, workerById } = useStore();
   const toast = useToast();
@@ -39,27 +39,15 @@ function usePaymentAlerts() {
     if (!prev || !readPreferences().paymentAlerts) return;
 
     const completed = transactions.filter((t) => t.status === "completed" && prev.get(t.id) !== "completed");
-    // A payment the owner cancelled on purpose (unclaimed, then refunded) already got its own confirmation.
-    const cancelledByOwner = (t: (typeof transactions)[number]) => prev.get(t.id) === "unclaimed" && Boolean(t.failureReason?.startsWith("Cancelled by you"));
-    const failed = transactions.filter((t) => t.status === "failed" && prev.get(t.id) !== "failed" && !cancelledByOwner(t));
-    const unclaimed = transactions.filter((t) => t.status === "unclaimed" && prev.get(t.id) !== "unclaimed");
+    const failed = transactions.filter((t) => t.status === "failed" && prev.get(t.id) !== "failed");
     const name = (id: string) => workerById(id)?.name ?? "a worker";
-
-    if (unclaimed.length) {
-      toast({
-        tone: "warn",
-        title: unclaimed.length === 1 ? `Waiting for ${name(unclaimed[0].workerId)} to join PayPal` : `${unclaimed.length} payments waiting for a PayPal sign-up`,
-        description: "PayPal emailed a sign-up link. The payment completes when it's claimed, or you can cancel and refund it.",
-        action: { label: "Review transactions", href: "/transactions" },
-      });
-    }
 
     if (completed.length === 1) {
       const t = completed[0];
       toast({ tone: "success", sound: "payment", title: "Payment completed", description: `${name(t.workerId)} received ${formatMoney(t.amount)}.` });
     } else if (completed.length > 1) {
       const total = completed.reduce((s, t) => s + t.amount, 0);
-      toast({ tone: "success", sound: "payment", title: `${completed.length} payments completed`, description: `${formatMoney(total)} paid out through PayPal.` });
+      toast({ tone: "success", sound: "payment", title: `${completed.length} payments completed`, description: `${formatMoney(total)} paid out through Cashfree.` });
     }
     if (failed.length) {
       toast({

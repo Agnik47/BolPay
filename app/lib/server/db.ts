@@ -17,7 +17,7 @@ import type { AttendanceRecord, IncentiveRules, Payout, Transaction, Worker } fr
  * file needs a writable disk, so it won't work on serverless hosts.
  */
 /** Bump when the data shape changes; an older database file is discarded and reseeded. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export type Workspace = "demo" | "zoho";
 export const WORKSPACES: Workspace[] = ["demo", "zoho"];
@@ -31,7 +31,7 @@ export interface AuditEntry {
 export interface Db {
   schemaVersion: number;
   audit: AuditEntry[];
-  /** Random per database, so a reseed never reuses PayPal sender_batch_ids from earlier runs. */
+  /** Random per database, so a reseed never reuses Cashfree transfer_ids from earlier runs. */
   batchSalt?: string;
   workers: Worker[];
   attendance: AttendanceRecord[];
@@ -54,7 +54,7 @@ export const WORKSPACE_COOKIE = "bolpay_dataset";
 /**
  * The dataset the current request works on. Each person chooses their own (see runInWorkspace, set per
  * request in app/lib/server/http.ts), so switching never changes what anyone else sees. Code outside a
- * signed-in request (worker pages, PayPal webhooks) gets the demo data.
+ * signed-in request (worker pages, Cashfree webhooks) gets the demo data.
  */
 export function getWorkspace(): Workspace {
   return scope().getStore() ?? "demo";

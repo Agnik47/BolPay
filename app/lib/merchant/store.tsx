@@ -60,7 +60,7 @@ interface Store extends Snapshot {
   loaded: boolean;
   error: string | null;
   dismissError: () => void;
-  addWorker: (w: { name: string; role: string; city: string; phone: string; payoutEmail: string; dailyWage: number }) => Promise<boolean>;
+  addWorker: (w: { name: string; role: string; city: string; phone: string; payoutUpi: string; dailyWage: number }) => Promise<boolean>;
   importCsv: (kind: "workers" | "deliveries", csv: string) => Promise<{ imported: number; errors: string[] } | null>;
   updateWorker: (id: string, patch: Partial<Worker>) => void;
   setAttendance: (workerId: string, date: string, patch: Partial<AttendanceRecord>) => void;
@@ -71,8 +71,6 @@ interface Store extends Snapshot {
   approvePayouts: (ids: string[]) => Promise<boolean>;
   rejectPayouts: (ids: string[]) => Promise<boolean>;
   retryTransaction: (id: string) => Promise<boolean>;
-  /** Cancels an unclaimed payment and refunds it. */
-  cancelTransaction: (id: string) => Promise<boolean>;
   workerById: (id: string) => Worker | undefined;
   /** Replaces the local data with a server snapshot (used after a voice flow runs on the server). */
   applySnapshot: (snapshot: Snapshot) => void;
@@ -82,7 +80,6 @@ interface Store extends Snapshot {
 
 const StoreContext = createContext<Store | null>(null);
 const POLL_MS = 4000;
-const UNCLAIMED_POLL_MS = 60_000;
 
 type ApiResult = { state?: Snapshot; error?: string; created?: number; needsReview?: number; skipped?: number; import?: { imported: number; errors: string[] } };
 
@@ -145,7 +142,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [refresh],
   );
 
-  // While any payment is in flight, ask the server to re-check PayPal.
+  // While any payment is in flight, ask the server to re-check Cashfree.
   const hasProcessing = state.transactions.some((t) => t.status === "processing");
   useEffect(() => {
     if (!hasProcessing) return;
@@ -155,17 +152,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }, POLL_MS);
     return () => clearInterval(handle);
   }, [hasProcessing]);
-
-  // A payment waiting for the recipient to sign up to PayPal can take days: check now and then, not every few seconds.
-  const hasUnclaimed = state.transactions.some((t) => t.status === "unclaimed");
-  useEffect(() => {
-    if (!hasUnclaimed || hasProcessing) return;
-    const handle = setInterval(async () => {
-      const r = await request("POST", "/api/payouts/sync");
-      if (r.state) dispatch({ type: "replace", snapshot: r.state });
-    }, UNCLAIMED_POLL_MS);
-    return () => clearInterval(handle);
-  }, [hasUnclaimed, hasProcessing]);
 
   const store = useMemo<Store>(() => {
     const act = async (method: string, path: string, body?: unknown) => apply(await request(method, path, body));
@@ -206,7 +192,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       approvePayouts: (ids) => act("POST", "/api/payouts/decide", { ids, decision: "approved" }),
       rejectPayouts: (ids) => act("POST", "/api/payouts/decide", { ids, decision: "rejected" }),
       retryTransaction: (id) => act("POST", `/api/transactions/${encodeURIComponent(id)}/retry`),
-      cancelTransaction: (id) => act("POST", `/api/transactions/${encodeURIComponent(id)}/cancel`),
       workerById: (id) => state.workers.find((w) => w.id === id),
       applySnapshot: (snapshot) => dispatch({ type: "replace", snapshot }),
       flush: async () => {

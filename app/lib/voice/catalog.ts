@@ -2,7 +2,7 @@ import raw from "./catalog.json";
 import type { Risk } from "./types";
 
 export interface SlotDef {
-  type: "workerSelector" | "enum" | "number" | "string" | "date" | "email";
+  type: "workerSelector" | "enum" | "number" | "string" | "date" | "upi";
   required: boolean;
   ask?: string;
   values?: string[];

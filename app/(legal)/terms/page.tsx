@@ -19,7 +19,7 @@ export default function TermsPage() {
     >
       <Section id="service" title="1. The service">
         <p>
-          BolPay helps businesses record attendance, calculate pay and incentives, approve payouts and send them through PayPal. It
+          BolPay helps businesses record attendance, calculate pay and incentives, approve payouts and send them through Cashfree. It
           includes an optional voice assistant that can carry out the same tasks from spoken or typed commands.
         </p>
       </Section>
@@ -35,18 +35,18 @@ export default function TermsPage() {
       <Section id="business" title="3. The business's responsibilities">
         <List>
           <li>Enter accurate worker details, wages and attendance.</li>
-          <li>Have each worker&apos;s permission to store their details and to pay them through PayPal.</li>
+          <li>Have each worker&apos;s permission to store their details and to pay them through Cashfree.</li>
           <li>Comply with the wage, tax and employment laws that apply to you. BolPay calculates pay from the rules you set; it does not file taxes or give legal advice.</li>
         </List>
       </Section>
 
       <Section id="payouts" title="4. Payouts">
         <List>
-          <li>Payouts are sent with PayPal Payouts from the PayPal account connected to your workspace. BolPay never holds your funds.</li>
+          <li>Payouts are sent with Cashfree Payouts from the Cashfree account connected to your workspace. BolPay never holds your funds.</li>
           <li>Only owners can approve payouts. Check each amount and recipient before you approve.</li>
-          <li>Once PayPal accepts a payout, BolPay cannot reverse it. Failed payouts can be retried after the cause is fixed.</li>
+          <li>Once Cashfree accepts a payout, BolPay cannot reverse it. Failed payouts can be retried after the cause is fixed.</li>
           <li>Amounts are shown in rupees and sent in US dollars at the exchange rate recorded on each transaction.</li>
-          <li>PayPal&apos;s own terms and fees apply to every payout.</li>
+          <li>Cashfree&apos;s own terms and fees apply to every payout.</li>
         </List>
       </Section>
 

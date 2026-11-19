@@ -27,11 +27,10 @@ export interface PlannerOutput {
   notUnderstood: string | null;
 }
 
-/** Snapshot of the money a step will move, shown to the manager before PayPal is called. */
+/** Snapshot of the money a step will move, shown to the manager before Cashfree is called. */
 export interface MoneyPreview {
   count: number;
   totalInr: number;
-  totalUsd: number;
   names: string[];
   skipped: string[];
 }

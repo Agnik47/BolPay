@@ -1,5 +1,5 @@
 {
-  "description": "Fixtures for the voice assistant eval. Every case runs in a dry-run session: nothing is written and PayPal is never called. Expectations describe behaviour (which actions, which outcome), not canned answers. Names refer to the seed data in app/lib/merchant/mock-data.ts.",
+  "description": "Fixtures for the voice assistant eval. Every case runs in a dry-run session: nothing is written and no payout is ever sent. Expectations describe behaviour (which actions, which outcome), not canned answers. Names refer to the seed data in app/lib/merchant/mock-data.ts.",
   "cases": [
     { "name": "single attendance", "turns": [{ "say": "mark Ravi present today", "expect": { "outcome": "planned", "actions": ["mark_attendance"], "summaryIncludes": ["Ravi Kumar", "present"] } }] },
     { "name": "multiple names in one step", "turns": [{ "say": "mark Ravi, Anita and Priya absent", "expect": { "outcome": "planned", "actions": ["mark_attendance"], "summaryIncludes": ["Ravi Kumar", "Anita Sharma", "Priya Nair", "absent"] } }] },

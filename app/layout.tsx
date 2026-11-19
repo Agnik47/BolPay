@@ -25,7 +25,7 @@ const plexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "BolPay",
-  description: "Voice-first payroll for daily-wage teams, paid out through PayPal.",
+  description: "Voice-first payroll for daily-wage teams, paid out through Cashfree.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

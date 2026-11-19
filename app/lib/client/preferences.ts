@@ -10,7 +10,7 @@ export interface Preferences {
   clickSounds: boolean;
   /** 0 to 1. */
   volume: number;
-  /** Pop-up notices when a PayPal payment completes or fails. */
+  /** Pop-up notices when a Cashfree payment completes or fails. */
   paymentAlerts: boolean;
 }
 

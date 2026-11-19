@@ -5,7 +5,7 @@ const MAX_IDS = 200;
 
 /**
  * POST { ids: string[], decision: "approved" | "rejected" }
- * Approving starts the PayPal transfers. Amounts and recipients are read from the server's
+ * Approving starts the Cashfree transfers. Amounts and recipients are read from the server's
  * own payout records, never from this request.
  */
 export async function POST(req: Request) {

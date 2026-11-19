@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Voice assistant eval. Runs the fixtures in voice-eval.cases.json against a running dev server using
- * dry-run sessions (nothing is written, PayPal is never called) and prints a pass rate plus latency.
+ * dry-run sessions (nothing is written, no payout is ever sent) and prints a pass rate plus latency.
  *
  *   npm run test:voice                 all cases
  *   npm run test:voice -- hindi        only cases whose name contains "hindi"

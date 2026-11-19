@@ -26,7 +26,7 @@ export function PayoutsView() {
   const decided = payouts.filter((p) => p.status === "approved" || p.status === "rejected").sort((a, b) => (b.decidedAt ?? "").localeCompare(a.decidedAt ?? ""));
   const chosen = pending.filter((p) => selected.has(p.id));
   const chosenTotal = chosen.reduce((s, p) => s + p.amount, 0);
-  const missingAccount = chosen.filter((p) => !workerById(p.workerId)?.payoutEmail);
+  const missingAccount = chosen.filter((p) => !workerById(p.workerId)?.payoutUpi);
   const allSelected = pending.length > 0 && chosen.length === pending.length;
 
   const toggle = (id: string) =>
@@ -50,7 +50,7 @@ export function PayoutsView() {
     if (kind === "approve") {
       toast({
         tone: "success",
-        title: `Sent ${n} payout${n === 1 ? "" : "s"} to PayPal`,
+        title: `Sent ${n} payout${n === 1 ? "" : "s"} to Cashfree`,
         description: `${formatMoney(total)} in total. You'll get a notice as each payment completes.`,
         action: { label: "Track in Transactions", href: "/transactions" },
       });
@@ -61,7 +61,7 @@ export function PayoutsView() {
 
   return (
     <>
-      <PageHeader title="Payout approvals" description="Review each payout, then approve to send it through PayPal." />
+      <PageHeader title="Payout approvals" description="Review each payout, then approve to send it through Cashfree." />
 
       <Stats className="mb-5">
         <Stat label="Pending" value={String(pending.length)} hint={review.length ? `${review.length} need review` : "Ready to decide"} tone={review.length ? "warn" : "default"} />
@@ -108,10 +108,10 @@ export function PayoutsView() {
         {confirming && chosen.length > 0 && (
           <div role="alertdialog" aria-label="Confirm payout approval" className="border-b border-amber-200 bg-amber-50 px-4 py-3.5 text-sm text-amber-950">
             <p className="font-semibold">Send {formatMoney(chosenTotal)} to {chosen.length} worker{chosen.length === 1 ? "" : "s"}?</p>
-            <p className="mt-0.5 text-amber-900">This starts the PayPal transfers and can&apos;t be undone from here.</p>
+            <p className="mt-0.5 text-amber-900">This starts the Cashfree transfers and can&apos;t be undone from here.</p>
             {missingAccount.length > 0 && (
               <p className="mt-1.5 font-medium text-rose-700">
-                {missingAccount.map((p) => workerById(p.workerId)?.name).join(", ")} {missingAccount.length === 1 ? "has" : "have"} no PayPal account, so{" "}
+                {missingAccount.map((p) => workerById(p.workerId)?.name).join(", ")} {missingAccount.length === 1 ? "has" : "have"} no UPI ID, so{" "}
                 {missingAccount.length === 1 ? "that payment" : "those payments"} will fail.
               </p>
             )}
@@ -154,7 +154,7 @@ export function PayoutsView() {
                             <Avatar name={w?.name ?? "?"} />
                             <div className="min-w-0">
                               <p className="font-medium text-slate-900">{w?.name}</p>
-                              <p className="truncate text-xs text-slate-500">{w?.payoutEmail || <span className="font-medium text-rose-700">No PayPal account</span>}</p>
+                              <p className="truncate text-xs text-slate-500">{w?.payoutUpi || <span className="font-medium text-rose-700">No UPI ID</span>}</p>
                             </div>
                           </div>
                         </td>

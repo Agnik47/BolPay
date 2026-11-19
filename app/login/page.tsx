@@ -24,7 +24,7 @@ export default function LoginPage() {
           <span className="text-base font-semibold tracking-tight text-slate-900">BolPay</span>
         </div>
         <h1 className="mt-4 text-lg font-semibold tracking-tight text-slate-900">Sign in</h1>
-        <p className="mt-0.5 text-sm text-slate-500">Attendance, payroll and PayPal payouts.</p>
+        <p className="mt-0.5 text-sm text-slate-500">Attendance, payroll and UPI payouts.</p>
 
         <div className="mt-4">
           <Suspense>

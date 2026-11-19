@@ -21,7 +21,7 @@ export interface MappedEmployee {
   active: boolean;
   /** Optional wage read from a custom field (see ZOHO_WAGE_FIELD). */
   wage: number | null;
-  /** Optional PayPal email read from a custom field (see ZOHO_PAYOUT_EMAIL_FIELD). */
+  /** Legacy: optional email read from a custom field (unused; payouts use UPI ids) (see ZOHO_PAYOUT_EMAIL_FIELD). */
   payoutEmail: string | null;
 }
 
@@ -96,7 +96,7 @@ export function cityFromAddress(address: string): string {
 export interface MapOptions {
   /** Link name or label of a custom field holding the daily wage. */
   wageField?: string;
-  /** Link name or label of a custom field holding the PayPal email. */
+  /** Link name or label of a custom field holding an email (unused). */
   payoutEmailField?: string;
   /** City to use when the address has none. */
   defaultCity?: string;

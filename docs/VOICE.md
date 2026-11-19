@@ -6,7 +6,7 @@ The voice assistant can run the whole workflow: attendance, deliveries, overtime
 
 ```
 mic / typed text
-   │  (ElevenLabs Scribe turns audio into text)
+   │  (Sarvam AI turns audio into text)
    ▼
 POST /api/voice/turn  { sessionId, text }          ← session lives on the SERVER
    │
@@ -50,7 +50,7 @@ Every action, its slots (type, required, the question to ask), its summary templ
 | `reject_payouts` | write | Nothing is sent |
 | `update_worker`, `add_worker` | write | Wage, email, city, role, phone, status |
 | `set_rule`, `set_tier`, `remove_tier` | write | Incentive rules (bumps the rules version) |
-| `sync_status` | read | Refresh PayPal statuses |
+| `sync_status` | read | Refresh Cashfree payout statuses |
 | `query` | read | 13 kinds: payout summary, failed, pending, needs review, missing attendance, attendance summary, worker pay, totals, top earners, worker list, rules summary… |
 | `navigate` | read | Open a screen |
 
@@ -63,7 +63,7 @@ npm run dev            # in one terminal
 npm run test:voice     # in another; filter with: npm run test:voice -- hindi
 ```
 
-`scripts/voice-eval.cases.json` has the fixtures. Each case is a conversation run in a **dry-run session**: nothing is written and PayPal is never called. They cover multi-step flows, clarification then answer, an unrelated command superseding a question, spoken confirm (English, Hindi, Hinglish), cancel, a confirm-looking command that must not confirm, edits to a waiting plan, ambiguous and unknown names, dates outside the period, queries, rule edits, and prompt-injection attempts.
+`scripts/voice-eval.cases.json` has the fixtures. Each case is a conversation run in a **dry-run session**: nothing is written and no payout is ever sent. They cover multi-step flows, clarification then answer, an unrelated command superseding a question, spoken confirm (English, Hindi, Hinglish), cancel, a confirm-looking command that must not confirm, edits to a waiting plan, ambiguous and unknown names, dates outside the period, queries, rule edits, and prompt-injection attempts.
 
 The runner prints pass or fail per case and the aggregate metrics. The same metrics are live at **`GET /api/voice/metrics`**: turns, outcomes, model latency p50 and p95, clarification rate, supersede rate, error rate, fast-path share of confirmations, and which model served each turn.
 
@@ -78,7 +78,7 @@ Open the voice panel (round teal button), tap **Tap and speak**, speak, tap agai
 ### 1. A multi-step flow, confirmed by voice
 1. Say: **"Mark Anita Sharma absent today, then calculate incentives for Bengaluru riders who completed at least twenty deliveries, then approve Ravi Kumar's payout."**
 2. The panel lists 3 steps. The assistant reads them and says it will show the exact amount before any money is sent.
-3. Say: **"Confirm."** Steps 1 and 2 run. It then stops with an amber card: *"Before I send money: 1 payment totalling ₹… (US$… sent to PayPal): Ravi Kumar."*
+3. Say: **"Confirm."** Steps 1 and 2 run. It then stops with an amber card: *"Before I send money: 1 payment totalling ₹…: Ravi Kumar."*
 4. Say: **"Yes."** (or **"Cancel"** to stop). The payment is sent. Check the Transactions screen.
 
 ### 2. Follow-ups that keep their context

@@ -15,14 +15,13 @@ interface Status {
   workspace: "demo" | "zoho";
   workers: number;
   attendance: number;
-  emails: { active: number; withEmail: number; withoutEmail: number; sandbox: number };
+  upi: { active: number; withUpi: number; withoutUpi: number };
   accountsUrl: string;
   peopleUrl: string;
   redirectUri: string;
   scopes: string;
   defaultWage: number;
   wageField: string | null;
-  payoutEmailField: string | null;
 }
 
 interface SyncSummary {
@@ -84,23 +83,7 @@ export function ZohoView() {
     await load();
   }
 
-  async function assignEmails() {
-    setBusy("emails");
-    const res = await fetch("/api/workers/sandbox-emails", { method: "POST" });
-    const d = (await res.json().catch(() => ({}))) as { sandbox?: { assigned: number }; state?: Snapshot; error?: string };
-    setBusy(null);
-    if (d.state) store.applySnapshot(d.state);
-    if (res.ok && d.sandbox) {
-      toast(
-        d.sandbox.assigned
-          ? { tone: "success", title: `Gave ${d.sandbox.assigned} employees a sandbox test email`, description: "Next, download the accounts CSV and upload it to PayPal." }
-          : { tone: "info", title: "Every active employee already has a PayPal email" },
-      );
-    } else {
-      toast({ tone: "error", title: "Could not assign test emails", description: d.error });
-    }
-    await load();
-  }
+
 
   async function openZohoData() {
     setBusy("open");
@@ -197,25 +180,12 @@ export function ZohoView() {
       )}
 
       {status && status.workers > 0 && (
-        <Card title="PayPal accounts for payouts" className="mb-4">
-          <div className="space-y-3 text-sm text-slate-700">
-            <p>
-              <span className="font-medium">{status.emails.withEmail}</span> of {status.emails.active} active employees have a PayPal email
-              {status.emails.withoutEmail > 0 && <span className="text-amber-800"> ({status.emails.withoutEmail} have none, so their payouts will fail)</span>}.
-              Zoho only supplies an email if it is filled in on the employee&apos;s profile; a later sync fills an empty one automatically.
-            </p>
-            <p className="text-slate-600">
-              On live PayPal an employee without an account gets a sign-up link by email when you pay them, and the payment waits as <em>Awaiting PayPal sign-up</em> (you can cancel and refund it on Transactions). PayPal has no API to create or delete{" "}
-              <span className="font-medium">sandbox</span> test accounts, so for testing use the two buttons below, then upload the CSV at developer.paypal.com → Testing tools → Sandbox accounts → Create bulk accounts (40 per file).
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button disabled={busy !== null || status.workspace !== "zoho" || status.emails.withoutEmail === 0} onClick={() => void assignEmails()} title={status.workspace !== "zoho" ? "Switch the dataset to Zoho HRMS first" : undefined}>
-                {busy === "emails" ? "Assigning…" : `Give ${status.emails.withoutEmail} employees a sandbox test email`}
-              </Button>
-              <CsvDownloads accounts={status.emails.sandbox} enabled={status.workspace === "zoho"} />
-            </div>
-            {status.workspace !== "zoho" && <p className="text-xs text-slate-500">These act on the active dataset. Switch to Zoho HRMS in the sidebar first.</p>}
-          </div>
+        <Card title="UPI IDs for payouts" className="mb-4">
+          <p className="text-sm text-slate-700">
+            <span className="font-medium">{status.upi.withUpi}</span> of {status.upi.active} active employees have a UPI ID
+            {status.upi.withoutUpi > 0 && <span className="text-amber-800"> ({status.upi.withoutUpi} have none, so their payouts will fail)</span>}.
+            Zoho People holds no payment details, so add each employee&apos;s UPI ID on Workers or by voice.
+          </p>
         </Card>
       )}
 
@@ -240,48 +210,11 @@ export function ZohoView() {
           <li>Employees become workers. Zoho owns the name, role, department, city, phone, joining date and active status, and updates them on every sync.</li>
           <li>Attendance for every day Zoho reports (present, absent, half day, leave, overtime) is imported. Weekends, holidays and days with nothing recorded are left alone, so you can still mark them in BolPay or by voice.</li>
           <li>
-            Pay settings belong to BolPay. A new employee gets the default daily wage{status?.wageField ? ` (or the "${status.wageField}" field)` : ""} and their Zoho work email{status?.payoutEmailField ? ` (or the "${status.payoutEmailField}" field)` : ""} as the PayPal account. Edit them on Workers or by voice; a sync never overwrites them.
+            Pay settings belong to BolPay. A new employee gets the default daily wage{status?.wageField ? ` (or the "${status.wageField}" field)` : ""}. Their UPI ID starts empty. Edit them on Workers or by voice; a sync never overwrites them.
           </li>
           <li>Payouts, approvals and the voice assistant work on this data exactly as on the demo data. Use the Dataset switch in the sidebar to go back.</li>
         </ul>
       </Card>
-    </>
-  );
-}
-
-/** PayPal's bulk upload takes at most 40 accounts per file, matching the export route. */
-const BULK_LIMIT = 40;
-
-/**
- * A real link only when there is something to download; otherwise a disabled button (a link marked
- * aria-disabled still downloads when clicked). More than 40 accounts are split into one file per upload.
- */
-function CsvDownloads({ accounts, enabled }: { accounts: number; enabled: boolean }) {
-  if (!enabled || accounts === 0) {
-    return (
-      <Button disabled title={!enabled ? "Switch the dataset to Zoho HRMS first" : "No employee uses a sandbox test email yet"}>
-        Download sandbox accounts CSV (0)
-      </Button>
-    );
-  }
-  const parts = Math.ceil(accounts / BULK_LIMIT);
-  if (parts === 1) {
-    return (
-      <a href="/api/export/sandbox-accounts?part=1" download className={buttonClass("secondary")}>
-        Download sandbox accounts CSV ({accounts})
-      </a>
-    );
-  }
-  return (
-    <>
-      {Array.from({ length: parts }, (_, i) => {
-        const size = i === parts - 1 ? accounts - BULK_LIMIT * i : BULK_LIMIT;
-        return (
-          <a key={i} href={`/api/export/sandbox-accounts?part=${i + 1}`} download className={buttonClass("secondary")}>
-            CSV part {i + 1} of {parts} ({size})
-          </a>
-        );
-      })}
     </>
   );
 }

@@ -1,5 +1,5 @@
 import "server-only";
-import { formatMoney, formatUsd } from "@/app/lib/merchant/format";
+import { formatMoney } from "@/app/lib/merchant/format";
 import { getPeriod, getToday } from "@/app/lib/server/context";
 import { getDb, logAudit } from "@/app/lib/server/db";
 import {
@@ -9,7 +9,6 @@ import {
   ServiceError,
   setAttendance,
   setRules,
-  settlement,
   submitPeriod,
   syncTransactions,
   updateWorker,
@@ -57,18 +56,16 @@ export function previewMoney(step: ResolvedStep): MoneyPreview | null {
   if (step.risk !== "money") return null;
   const db = getDb();
   const ids = targets(step);
-  if (!ids) return { count: 0, totalInr: 0, totalUsd: 0, names: [], skipped: [] };
-  const { rate } = settlement();
+  if (!ids) return { count: 0, totalInr: 0, names: [], skipped: [] };
   const nameOf = (id: string) => db.workers.find((w) => w.id === id)?.name ?? "Unknown";
   const items =
     step.action === "approve_payouts"
       ? db.payouts.filter((p) => p.status === "pending" && ids.includes(p.workerId)).map((p) => ({ workerId: p.workerId, amount: p.amount }))
       : db.transactions.filter((t) => t.status === "failed" && t.periodLabel === getPeriod().label && ids.includes(t.workerId)).map((t) => ({ workerId: t.workerId, amount: t.amount }));
-  const skipped = [...new Set(items.filter((i) => !db.workers.find((w) => w.id === i.workerId)?.payoutEmail).map((i) => nameOf(i.workerId)))];
+  const skipped = [...new Set(items.filter((i) => !db.workers.find((w) => w.id === i.workerId)?.payoutUpi).map((i) => nameOf(i.workerId)))];
   return {
     count: items.length,
     totalInr: round2(items.reduce((s, i) => s + i.amount, 0)),
-    totalUsd: round2(items.reduce((s, i) => s + Math.round((i.amount / rate) * 100) / 100, 0)),
     names: items.map((i) => nameOf(i.workerId)),
     skipped,
   };
@@ -78,8 +75,8 @@ export const samePreview = (a: MoneyPreview, b: MoneyPreview) => a.count === b.c
 
 export function describePreview(p: MoneyPreview): string {
   const who = p.names.length <= 5 ? p.names.join(", ") : `${p.names.slice(0, 5).join(", ")} and ${p.names.length - 5} more`;
-  const warn = p.skipped.length ? ` ${p.skipped.join(", ")} ${p.skipped.length === 1 ? "has" : "have"} no PayPal email, so that payment will fail.` : "";
-  return `${count(p.count, "payment")} totalling ${formatMoney(p.totalInr)} (${formatUsd(p.totalUsd)} sent to PayPal): ${who}.${warn}`;
+  const warn = p.skipped.length ? ` ${p.skipped.join(", ")} ${p.skipped.length === 1 ? "has" : "have"} no UPI ID, so that payment will fail.` : "";
+  return `${count(p.count, "payment")} totalling ${formatMoney(p.totalInr)}: ${who}.${warn}`;
 }
 
 const failMessage = (e: unknown) => (e instanceof ServiceError ? e.message : "Something went wrong");
@@ -139,7 +136,7 @@ async function runStep(step: ResolvedStep, dryRun: boolean): Promise<StepOutcome
       if (decision === "rejected") return { ok: true, message: `Rejected ${count(pending.length, "payout")}.` };
       return {
         ok: true,
-        message: `Approved ${count(pending.length, "payout")} (${formatMoney(pending.reduce((s, p) => s + p.amount, 0))}) and sent them to PayPal.${failedNow.length ? ` ${count(failedNow.length, "payment")} failed straight away: ${failedNow.map((t) => nameOf(t.workerId)).join(", ")}.` : ""}`,
+        message: `Approved ${count(pending.length, "payout")} (${formatMoney(pending.reduce((s, p) => s + p.amount, 0))}) and sent them to Cashfree.${failedNow.length ? ` ${count(failedNow.length, "payment")} failed straight away: ${failedNow.map((t) => nameOf(t.workerId)).join(", ")}.` : ""}`,
       };
     }
 
@@ -160,9 +157,9 @@ async function runStep(step: ResolvedStep, dryRun: boolean): Promise<StepOutcome
     }
 
     case "sync_status": {
-      if (dryRun) return { ok: true, message: "Would refresh payment statuses from PayPal." };
+      if (dryRun) return { ok: true, message: "Would refresh payment statuses from Cashfree." };
       await syncTransactions();
-      return { ok: true, message: "Payment statuses refreshed from PayPal." };
+      return { ok: true, message: "Payment statuses refreshed from Cashfree." };
     }
 
     case "update_worker": {
@@ -177,17 +174,17 @@ async function runStep(step: ResolvedStep, dryRun: boolean): Promise<StepOutcome
         return { ok: false, message: failMessage(e) };
       }
       logAudit("voice.update_worker", `${nameOf(id)}: ${field}`);
-      return { ok: true, message: `Updated ${field === "payoutEmail" ? "the PayPal email" : field} for ${nameOf(id)}.` };
+      return { ok: true, message: `Updated ${field === "payoutUpi" ? "the UPI ID" : field} for ${nameOf(id)}.` };
     }
 
     case "add_worker": {
       if (dryRun) return { ok: true, message: `Would add ${a.name}.` };
       try {
-        addWorker({ name: a.name, role: a.role ?? "Delivery Rider", city: a.city ?? "Bengaluru", dailyWage: a.dailyWage, payoutEmail: a.payoutEmail ?? "" });
+        addWorker({ name: a.name, role: a.role ?? "Delivery Rider", city: a.city ?? "Bengaluru", dailyWage: a.dailyWage, payoutUpi: a.payoutUpi ?? "" });
       } catch (e) {
         return { ok: false, message: failMessage(e) };
       }
-      return { ok: true, message: `Added ${a.name}${a.payoutEmail ? "" : " (no PayPal email yet, so payouts will fail until you add one)"}.` };
+      return { ok: true, message: `Added ${a.name}${a.payoutUpi ? "" : " (no UPI ID yet, so payouts will fail until you add one)"}.` };
     }
 
     case "set_rule":
@@ -243,7 +240,7 @@ export function allowedFor(role: VoiceRole, step: ResolvedStep) {
 /**
  * Runs steps top to bottom starting at `cursor`. Stops at the first failure, and pauses before any
  * money step whose exact figures the manager hasn't confirmed (or whose figures changed since).
- * With dryRun nothing is written and PayPal is never called.
+ * With dryRun nothing is written and Cashfree is never called.
  */
 export async function runPlan(steps: ResolvedStep[], cursor: number, dryRun: boolean, role: VoiceRole = "supervisor"): Promise<RunResult> {
   const outcomes: Record<number, StepOutcome> = {};

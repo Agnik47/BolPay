@@ -8,7 +8,7 @@ import type { Worker } from "@/app/lib/merchant/types";
 import { useToast } from "../../feedback/Toaster";
 import { Avatar, Button, Card, EmptyState, Field, fieldClass, inputClass, PageHeader, StatusBadge, td, th, thRight } from "../ui";
 
-const EMPTY = { name: "", role: "Delivery Rider", city: "Bengaluru", phone: "", payoutEmail: "", dailyWage: "" };
+const EMPTY = { name: "", role: "Delivery Rider", city: "Bengaluru", phone: "", payoutUpi: "", dailyWage: "" };
 
 export function WorkersView() {
   const { workers, addWorker, updateWorker, importCsv } = useStore();
@@ -48,9 +48,9 @@ export function WorkersView() {
     e.preventDefault();
     if (!valid) return;
     const name = form.name.trim();
-    const ok = await addWorker({ name, role: form.role.trim(), city: form.city.trim(), phone: form.phone.trim(), payoutEmail: form.payoutEmail.trim(), dailyWage: wage });
+    const ok = await addWorker({ name, role: form.role.trim(), city: form.city.trim(), phone: form.phone.trim(), payoutUpi: form.payoutUpi.trim(), dailyWage: wage });
     if (!ok) return; // the error toast comes from the store; keep the form so nothing is lost
-    toast({ tone: "success", title: `Added ${name}`, description: form.payoutEmail.trim() ? undefined : "Add a PayPal email before their first payout." });
+    toast({ tone: "success", title: `Added ${name}`, description: form.payoutUpi.trim() ? undefined : "Add a UPI ID before their first payout." });
     setForm(EMPTY);
     setShowForm(false);
   }
@@ -84,7 +84,7 @@ export function WorkersView() {
           isOwner && <>
             <input ref={workersFile} type="file" accept=".csv,text/csv" hidden onChange={(e) => void onFile("workers", e.target.files?.[0])} />
             <input ref={deliveriesFile} type="file" accept=".csv,text/csv" hidden onChange={(e) => void onFile("deliveries", e.target.files?.[0])} />
-            <Button onClick={() => workersFile.current?.click()} title="Columns: name, role, city, phone, payoutEmail, dailyWage">Import workers</Button>
+            <Button onClick={() => workersFile.current?.click()} title="Columns: name, role, city, phone, payoutUpi, dailyWage">Import workers</Button>
             <Button onClick={() => deliveriesFile.current?.click()} title="Columns: worker, date, deliveries, status, overtime">Import deliveries</Button>
             <Button variant="primary" onClick={() => setShowForm((s) => !s)} aria-expanded={showForm}>{showForm ? "Cancel" : "Add worker"}</Button>
           </>
@@ -98,7 +98,7 @@ export function WorkersView() {
             <Field label="City"><input className={inputClass} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
             <Field label="Daily wage (₹)"><input className={inputClass} type="number" min="1" step="0.5" value={form.dailyWage} onChange={(e) => setForm({ ...form, dailyWage: e.target.value })} required /></Field>
             <Field label="Phone"><input className={inputClass} type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
-            <Field label="PayPal email" hint="Needed to receive payouts"><input className={inputClass} type="email" value={form.payoutEmail} onChange={(e) => setForm({ ...form, payoutEmail: e.target.value })} /></Field>
+            <Field label="UPI ID" hint="Needed to receive payouts, like name@okicici"><input className={inputClass} type="text" placeholder="name@bank" value={form.payoutUpi} onChange={(e) => setForm({ ...form, payoutUpi: e.target.value })} /></Field>
             <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
               <Button type="submit" variant="primary" disabled={!valid}>Save worker</Button>
               <Button variant="ghost" onClick={() => { setForm(EMPTY); setShowForm(false); }}>Cancel</Button>
@@ -120,7 +120,7 @@ export function WorkersView() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px]">
               <thead>
-                <tr><th className={th}>Worker</th><th className={th}>Role</th><th className={thRight}>Daily wage</th><th className={th}>PayPal</th><th className={th}>Joined</th><th className={th}>Status</th><th className={th}><span className="sr-only">Actions</span></th></tr>
+                <tr><th className={th}>Worker</th><th className={th}>Role</th><th className={thRight}>Daily wage</th><th className={th}>UPI ID</th><th className={th}>Joined</th><th className={th}>Status</th><th className={th}><span className="sr-only">Actions</span></th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {shown.map((w) => (
@@ -144,7 +144,7 @@ export function WorkersView() {
                         </button>
                       )}
                     </td>
-                    <td className={`${td} max-w-[13rem] truncate`}>{w.payoutEmail || <span className="text-xs font-medium text-rose-700">Missing</span>}</td>
+                    <td className={`${td} max-w-[13rem] truncate`}>{w.payoutUpi || <span className="text-xs font-medium text-rose-700">Missing</span>}</td>
                     <td className={`${td} whitespace-nowrap`}>{formatDate(w.joinedOn)}</td>
                     <td className={td}><StatusBadge status={w.status} /></td>
                     <td className={`${td} text-right`}>

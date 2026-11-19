@@ -5,7 +5,7 @@ const MAX_CSV_CHARS = 1_000_000;
 
 /**
  * POST { kind: "workers" | "deliveries", csv: string }
- * workers columns:    name, role, city, phone, payoutEmail, dailyWage
+ * workers columns:    name, role, city, phone, payoutUpi, dailyWage
  * deliveries columns: worker (name or id), date, deliveries, status, overtime
  */
 export async function POST(req: Request) {

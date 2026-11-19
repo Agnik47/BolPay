@@ -14,7 +14,7 @@ const idFor = (employeeId: string) => `z-${employeeId.toLowerCase().replace(/[^a
  * Who owns what, so a re-sync never undoes work done in BolPay:
  *  - Zoho owns identity and attendance: name, role, department, city, phone, joining date, active status,
  *    and the attendance of every day Zoho reports (weekends, holidays and unmarked days are left alone).
- *  - BolPay owns pay: daily wage and PayPal email are set once when an employee is first imported
+ *  - BolPay owns pay: daily wage and UPI id are set once when an employee is first imported
  *    (from the optional custom fields, else from the defaults) and are never overwritten by a sync.
  * Zoho People has no salary data, so the default wage (ZOHO_DEFAULT_DAILY_WAGE) is a placeholder to edit.
  */
@@ -26,7 +26,7 @@ export async function syncZoho(): Promise<SyncSummary> {
 
   const rows = await fetchEmployeeRows();
   const employees = rows
-    .map((r) => mapEmployee(r, { today, defaultCity: cfg.defaultCity, wageField: cfg.wageField, payoutEmailField: cfg.payoutEmailField }))
+    .map((r) => mapEmployee(r, { today, defaultCity: cfg.defaultCity, wageField: cfg.wageField }))
     .filter((e): e is MappedEmployee => e !== null);
   if (employees.length === 0) throw new ZohoError("Zoho returned no employee records. Check that the connected user can view the Employee form.", 502);
 
@@ -38,11 +38,9 @@ export async function syncZoho(): Promise<SyncSummary> {
     const common = { name: e.name, role: e.role, city: e.city, phone: e.phone, status: e.active ? ("active" as const) : ("inactive" as const), department: e.department, joinedOn: e.joinedOn ?? today };
     if (existing) {
       Object.assign(existing, common);
-      // BolPay owns the PayPal email, except that an empty one is filled once Zoho has an address for the employee.
-      if (!existing.payoutEmail) existing.payoutEmail = e.payoutEmail ?? e.email;
       updated++;
     } else {
-      const w: Worker = { id: idFor(e.employeeId), payoutEmail: e.payoutEmail ?? e.email, dailyWage: e.wage ?? cfg.defaultWage, externalId: e.externalId, source: "zoho", ...common };
+      const w: Worker = { id: idFor(e.employeeId), payoutUpi: "", dailyWage: e.wage ?? cfg.defaultWage, externalId: e.externalId, source: "zoho", ...common };
       db.workers.push(w);
       created++;
     }

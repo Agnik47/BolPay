@@ -6,7 +6,7 @@ import { SiteFooter } from "@/app/components/SiteFooter";
 import { requireRole } from "@/app/lib/auth/dal";
 import { getSnapshot } from "@/app/lib/server/service";
 import { calculatePay } from "@/app/lib/merchant/incentives";
-import { dateRange, formatDate, formatDateTime, formatMoney, formatUsd } from "@/app/lib/merchant/format";
+import { dateRange, formatDate, formatDateTime, formatMoney } from "@/app/lib/merchant/format";
 import { Card, EmptyState, Notice, PageHeader, Stat, Stats, StatusBadge, td, th, thRight } from "@/app/components/merchant/ui";
 import { signOut } from "@/app/login/actions";
 
@@ -75,7 +75,7 @@ async function MyPay() {
           <Stat label="Earned so far" value={formatMoney(pay.total)} hint="This period" />
           <Stat label="Days worked" value={String(pay.payDays)} hint={`of ${pay.periodDays} marked`} />
           <Stat label="Delivery bonus" value={formatMoney(pay.tierBonus + pay.performanceIncentive)} hint={`${pay.extraUnits} extra deliveries`} />
-          <Stat label="Paid to date" value={formatMoney(paidTotal)} hint="Through PayPal" />
+          <Stat label="Paid to date" value={formatMoney(paidTotal)} hint="Through Cashfree" />
         </Stats>
 
         {pending.length > 0 && (
@@ -120,7 +120,7 @@ async function MyPay() {
                       <td className={`${td} font-mono text-xs`}>{t.reference && t.reference !== "—" ? t.reference : <span className="font-sans text-slate-400">Not assigned</span>}</td>
                       <td className={`${td} text-right tabular-nums`}>
                         <span className="text-slate-900">{formatMoney(t.amount)}</span>
-                        {t.usdAmount !== undefined && <span className="block text-xs text-slate-500">{formatUsd(t.usdAmount)} via PayPal</span>}
+
                       </td>
                       <td className={td}><StatusBadge status={t.status} /></td>
                     </tr>

@@ -20,7 +20,7 @@ export interface PlanResult extends PlannerOutput {
 }
 
 /**
- * The planner prompt is assembled from the catalog and live data, in the order PayPal's prompt guide
+ * The planner prompt is assembled from the catalog and live data, in the order the provider's prompt guide
  * recommends: role, context, the action reference, explicit rules, examples. Worker emails and phone
  * numbers never go into it.
  */

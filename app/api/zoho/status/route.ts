@@ -1,6 +1,6 @@
 import { OWNER, respond } from "@/app/lib/server/http";
 import { getDb, getWorkspace } from "@/app/lib/server/db";
-import { emailReadiness } from "@/app/lib/server/sandbox";
+import { upiReadiness } from "@/app/lib/server/readiness";
 import { connection, readZoho, zohoConfig, zohoConfigured } from "@/app/lib/zoho/client";
 
 /** GET: whether Zoho is configured and connected, the last sync, and what the Zoho dataset holds. Owners only. */
@@ -18,14 +18,13 @@ export async function GET() {
         workspace: getWorkspace(),
         workers: db.workers.length,
         attendance: db.attendance.length,
-        emails: emailReadiness("zoho"),
+        upi: upiReadiness("zoho"),
         accountsUrl: c.accountsUrl,
         peopleUrl: c.peopleUrl,
         redirectUri: c.redirectUri,
         scopes: c.scopes,
         defaultWage: c.defaultWage,
         wageField: c.wageField ?? null,
-        payoutEmailField: c.payoutEmailField ?? null,
       },
     };
   }, OWNER);

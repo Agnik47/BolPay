@@ -20,7 +20,7 @@ const SAMPLES: { sound: SoundName; label: string; when: string }[] = [
   { sound: "tap", label: "Click", when: "Pressing a button, link or tab" },
   { sound: "toggleOn", label: "Switch", when: "Turning a setting on or off" },
   { sound: "success", label: "Saved", when: "A change is saved, or payouts are approved" },
-  { sound: "payment", label: "Payment completed", when: "PayPal confirms a worker was paid" },
+  { sound: "payment", label: "Payment completed", when: "Cashfree confirms a worker was paid" },
   { sound: "attention", label: "Needs you", when: "A payout is waiting for your confirmation" },
   { sound: "notify", label: "Update", when: "An assistant reply or other update arrives" },
   { sound: "error", label: "Problem", when: "A save, transfer or request fails" },
@@ -149,7 +149,7 @@ function Notifications() {
   return (
     <>
       <Card title="Notifications" flush>
-        <Row title="Payment updates" description="A notice when a PayPal payment completes or fails. Errors from your own actions always show.">
+        <Row title="Payment updates" description="A notice when a Cashfree payment completes or fails. Errors from your own actions always show.">
           {(ids) => <Switch checked={prefs.paymentAlerts} labelledBy={ids.label} describedBy={ids.desc} onChange={(on) => update({ paymentAlerts: on })} />}
         </Row>
       </Card>

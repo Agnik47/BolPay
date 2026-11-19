@@ -1,21 +1,21 @@
 # BolPay AI · Speak. Approve. Pay.
 
-**Voice-first payroll for daily-wage and gig crews.** A manager *speaks* (English, Hindi, Hinglish and more), BolPay turns it into a checked plan, a deterministic rules engine calculates every rupee, and money moves through the **PayPal Payouts API** only after a human approves the exact amount.
+**Voice-first payroll for daily-wage and gig crews.** A manager *speaks* (English, Hindi, Hinglish and more), BolPay turns it into a checked plan, a deterministic rules engine calculates every rupee, and money moves through **Cashfree Payouts (UPI)** only after a human approves the exact amount.
 
 > *"bol"* means *speak* in Hindi.
 
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)
-![PayPal Payouts](https://img.shields.io/badge/PayPal-Payouts%20API%20(sandbox)-003087?logo=paypal)
-![ElevenLabs](https://img.shields.io/badge/ElevenLabs-Scribe%20%2B%20TTS-111)
+![Cashfree Payouts](https://img.shields.io/badge/Cashfree-Payouts%20UPI%20(sandbox)-6c3df4)
+![Sarvam AI](https://img.shields.io/badge/Sarvam%20AI-speech%20in%20%26%20out-ff6a00)
 ![Groq](https://img.shields.io/badge/Groq-gpt--oss--120b-f55036)
 ![Supabase Auth](https://img.shields.io/badge/Supabase-Auth%20%2B%20roles-3ecf8e?logo=supabase)
 ![Voice eval](https://img.shields.io/badge/voice%20eval-40%2F40-brightgreen)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 
-Built for the **PayPal AI Hackathon 2026**.
+Built as a hackathon project, with payments powered by **Cashfree**.
 
 ### Agentic commerce, with a human in control
-BolPay's voice assistant is an AI agent that plans and carries out payments, not a single command parser. One sentence can hold several intents ("mark Anita absent, prepare payouts for Ravi and Mohammed, then approve everything pending"). The agent turns it into an ordered list of tool calls from a catalog of 15 actions (attendance, overtime, deliveries, payout prepare, approve, reject, retry, worker edits, incentive rules, status sync, 13 kinds of read only questions, navigation). A server side resolver validates every call against real records, asks one clarifying question when a name or number is missing or ambiguous, and keeps the conversation across turns, so follow ups, plan edits, "cancel" and a spoken "confirm" in English, Hindi or Hinglish all work. The executor runs the steps in order and stops at a money checkpoint that shows the exact rupee and dollar total. The model never calculates an amount and never decides to execute: only the plan the server stored can run. 40 dry run conversations cover this, including prompt injection attempts (`npm run test:voice`).
+BolPay's voice assistant is an AI agent that plans and carries out payments, not a single command parser. One sentence can hold several intents ("mark Anita absent, prepare payouts for Ravi and Mohammed, then approve everything pending"). The agent turns it into an ordered list of tool calls from a catalog of 15 actions (attendance, overtime, deliveries, payout prepare, approve, reject, retry, worker edits, incentive rules, status sync, 13 kinds of read only questions, navigation). A server side resolver validates every call against real records, asks one clarifying question when a name or number is missing or ambiguous, and keeps the conversation across turns, so follow ups, plan edits, "cancel" and a spoken "confirm" in English, Hindi or Hinglish all work. The executor runs the steps in order and stops at a money checkpoint that shows the exact count and rupee total. The model never calculates an amount and never decides to execute: only the plan the server stored can run. 40 dry run conversations cover this, including prompt injection attempts (`npm run test:voice`).
 
 ---
 
@@ -28,7 +28,7 @@ BolPay's voice assistant is an AI agent that plans and carries out payments, not
 6. [Safety model: AI plans, humans approve, code calculates](#6-safety-model-ai-plans-humans-approve-code-calculates)
 7. [Roles and access](#7-roles-and-access)
 8. [Data model and rules engine](#8-data-model-and-rules-engine)
-9. [Tech stack and how AI and PayPal are used](#9-tech-stack-and-how-ai-and-paypal-are-used)
+9. [Tech stack and how AI and Cashfree are used](#9-tech-stack-and-how-ai-and-cashfree-are-used)
 10. [Run it locally](#10-run-it-locally)
 11. [Testing](#11-testing)
 12. [Project structure](#12-project-structure)
@@ -75,8 +75,8 @@ BolPay keeps the manager in charge and gives each part of the job to the right c
 flowchart LR
     S["🎙️ Speak<br/>'Mark Ravi and Anita present,<br/>then prepare payouts for riders<br/>with 20+ deliveries'"] --> U["🧠 Understand<br/>LLM plans ordered steps,<br/>server checks every name,<br/>date and number"]
     U --> C["🧮 Calculate<br/>deterministic rules engine<br/>(no AI in the maths)"]
-    C --> A["✅ Approve<br/>exact count, ₹ and US$ total<br/>shown before money moves"]
-    A --> P["💳 Pay<br/>PayPal Payouts batch<br/>with idempotent ids"]
+    C --> A["✅ Approve<br/>exact count and ₹ total<br/>shown before money moves"]
+    A --> P["💳 Pay<br/>Cashfree UPI transfers<br/>with idempotent ids"]
     P --> R["🔊 Report<br/>webhooks and sync update status,<br/>answered by voice"]
 
     classDef step fill:#e6f6f4,stroke:#0d9488,color:#134e4a
@@ -88,8 +88,8 @@ flowchart LR
 | Fill forms, juggle spreadsheets | Say it in your own language, and chain several actions in one sentence |
 | Hand-calculated bonuses | Versioned rules engine: wage, overtime, per-unit incentive, daily delivery tiers, attendance bonus |
 | Bad records slip into payroll | Missing or conflicting records are flagged **Needs Review** and can't be paid until fixed |
-| Pay people one at a time | One approval sends a PayPal Payouts batch; failures show a reason and can be retried |
-| "Did it go through?" | Status from PayPal (webhooks and sync), shown on screen and spoken back |
+| Pay people one at a time | One approval sends UPI payouts through Cashfree; failures show a reason and can be retried |
+| "Did it go through?" | Status from Cashfree (webhooks and sync), shown on screen and spoken back |
 | No proof of income | Each worker logs in and sees their own attendance, earnings and payment history |
 
 ## 3. System design
@@ -121,9 +121,9 @@ flowchart LR
     subgraph External["☁️ External services"]
         direction TB
         SB["Supabase Auth<br/>logins and roles"]
-        STT["ElevenLabs Scribe + TTS<br/>speech ⇄ text"]
+        STT["Sarvam AI<br/>speech ⇄ text"]
         LLM["Groq LLM<br/>gpt-oss-120b → 20b"]
-        PP["PayPal Payouts API<br/>(sandbox)"]
+        PP["Cashfree Payouts API<br/>(sandbox, UPI)"]
     end
 
     UI --> PX
@@ -138,7 +138,7 @@ flowchart LR
     SVC --> DB
     API -- "audio, reply text" --> STT
     PL -- "transcript" --> LLM
-    SVC -- "create batch, sync" --> PP
+    SVC -- "create transfers, sync" --> PP
     PP -. "signed webhook" .-> API
 
     classDef ext fill:#eef2ff,stroke:#4f46e5,color:#1e1b4b
@@ -156,8 +156,8 @@ flowchart LR
 | All logic behind one service layer (`app/lib/server/service.ts`) | The screens and the voice executor call the same functions with the same validation, so voice can't do anything the screens can't |
 | Every API route goes through `respond(fn, roles)` | Login and role checks are on by default, so a forgotten route fails safe (401/403) |
 | The LLM only produces a *plan* (`[{action, args}]`) | The server resolves who and what is meant, the rules engine calculates, and a human confirms |
-| Amounts stored in ₹, settled in USD in one place | PayPal sandbox payouts settle in USD; `INR_PER_USD` converts once, and each transaction stores both amounts and the rate |
-| Deterministic `sender_batch_id` (payout ids + salt + attempt) | A double click or a retry can't pay twice |
+| Amounts stored, shown and paid in ₹ | Cashfree pays UPI transfers in INR, so there is no currency conversion anywhere |
+| Deterministic `transfer_id` (payout id + salt + attempt) | A double click or a retry can't pay twice: Cashfree rejects a repeated id |
 | Supabase for identity, JSON store for app data | Real logins and roles now, with the data layer isolated in `db.ts` so it can move to Postgres later (a schema with row-level security is already in `supabase/migrations/`) |
 
 ## 4. How a voice command becomes a payment
@@ -166,7 +166,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    MIC["🎙️ Audio or typed text"] --> STT["ElevenLabs Scribe<br/>speech to text"]
+    MIC["🎙️ Audio or typed text"] --> STT["Sarvam AI<br/>speech to text"]
     STT --> TURN["POST /api/voice/turn<br/>session kept on the server"]
     TURN --> Q{"Plan waiting<br/>for confirm?"}
     Q -- "'yes please', 'haan kar do'" --> RUN
@@ -183,12 +183,12 @@ flowchart TD
     RUN --> ROLE{"Allowed for<br/>this role?"}
     ROLE -- no --> DENY["'Only the owner can do that'"]
     ROLE -- yes --> MONEY{"Money step?"}
-    MONEY -- yes --> CHK["Checkpoint: exact count,<br/>₹ total and US$ total;<br/>asks again if numbers changed"]
+    MONEY -- yes --> CHK["Checkpoint: exact count<br/>and ₹ total;<br/>asks again if numbers changed"]
     MONEY -- no --> DONE
-    CHK --> DONE["Reply translated and<br/>spoken by ElevenLabs TTS"]
+    CHK --> DONE["Reply translated and<br/>spoken by Sarvam AI TTS"]
 ```
 
-### 4.2 End to end: from a sentence to money in a worker's PayPal account
+### 4.2 End to end: from a sentence to money in a worker's UPI account
 
 ```mermaid
 sequenceDiagram
@@ -198,11 +198,11 @@ sequenceDiagram
     participant S as BolPay server
     participant G as Groq LLM
     participant R as Rules engine
-    participant P as PayPal Payouts
+    participant P as Cashfree Payouts
     actor W as Worker
 
     M->>V: "Prepare payouts for Bengaluru riders with 20+ deliveries, then approve them"
-    V->>S: audio to text (ElevenLabs Scribe)
+    V->>S: audio to text (Sarvam AI)
     S->>G: transcript + action catalog
     G-->>S: plan: prepare_payouts, approve_payouts
     S->>S: resolve riders, dates and filters against real records
@@ -210,18 +210,18 @@ sequenceDiagram
     M->>V: "Confirm"
     S->>R: calculate pay for each qualifying rider
     R-->>S: payouts (problem records go to Needs Review)
-    S-->>V: checkpoint: 12 payments, ₹ total and US$ total
+    S-->>V: checkpoint: 12 payments and the ₹ total
     M->>V: "Yes"
-    S->>P: create payout batch (idempotent sender_batch_id)
-    P-->>S: batch id, items processing
-    P-->>W: money arrives in the PayPal account
-    P->>S: signed webhook PAYMENT.PAYOUTS-ITEM.SUCCEEDED
+    S->>P: create UPI transfers (idempotent transfer_id)
+    P-->>S: transfers received, processing
+    P-->>W: money arrives by UPI
+    P->>S: signed webhook TRANSFER_SUCCESS
     S-->>V: transactions completed
     M->>V: "How many payments failed?"
-    V-->>M: spoken answer (ElevenLabs TTS)
+    V-->>M: spoken answer (Sarvam AI TTS)
 ```
 
-The checkpoint figures above are illustrative. A real run on the sandbox: *"Calculate incentives for Mohammed Ali, then approve Mohammed Ali's payout"* prepared the payout, paused with **1 payment, ₹9,403.75, US$110.63**, sent it only after a second confirm, and *"refresh the payment status"* then reported it completed.
+The checkpoint figures above are illustrative: the assistant pauses with the exact payment count and ₹ total, sends only after a second confirm, and *"refresh the payment status"* then reports each transfer's state.
 
 ## 5. Payout lifecycle
 
@@ -234,16 +234,16 @@ stateDiagram-v2
     NeedsReview --> Calculated: fix data, resubmit
     Pending --> Rejected: owner rejects
     Rejected --> Calculated: resubmit (new id)
-    Pending --> Processing: owner approves exact amount, PayPal batch created
+    Pending --> Processing: owner approves exact amount, Cashfree transfer created
     Processing --> Completed: webhook or sync
-    Processing --> Failed: e.g. no PayPal account
+    Processing --> Failed: e.g. no valid UPI ID
     Failed --> Processing: retry (attempt + 1)
     Completed --> [*]
 
     note right of Processing
         From here on it is a
         Transaction with the
-        PayPal batch id
+        Cashfree transfer id
     end note
 ```
 
@@ -252,15 +252,15 @@ stateDiagram-v2
 | Risk | Guardrail |
 |---|---|
 | The model invents an amount | The LLM never calculates money. Every amount comes from the rules engine (`app/lib/merchant/incentives.ts`) |
-| The model "decides" to pay | Confirm only runs the plan the server stored and showed. Money steps need a second confirm on the exact count and ₹ and US$ totals |
+| The model "decides" to pay | Confirm only runs the plan the server stored and showed. Money steps need a second confirm on the exact count and ₹ total |
 | Numbers change after confirming | The executor re-checks the figures right before running and asks again if they differ |
 | "OK, mark Ravi absent" mistaken for a yes | Only a whole-utterance confirm phrase confirms; anything else is treated as a new instruction |
 | Wrong person paid | Workers, cities and selectors ("everyone except Priya") are resolved by the server from real records, with a question when something is ambiguous |
 | Bad data gets paid | Missing or contradictory attendance marks a payout **Needs Review**, and the server refuses to approve it |
-| Double payment | Deterministic `sender_batch_id`, so PayPal rejects a duplicate batch |
+| Double payment | Deterministic `transfer_id`, so Cashfree rejects a duplicate transfer |
 | Prompt injection ("skip confirmation") | Covered by eval fixtures; the plan still needs confirmation |
-| Personal data sent to the model | Worker emails and phone numbers are never sent to the LLM |
-| Spoofed payment status | PayPal webhooks are signature-verified before anything is trusted |
+| Personal data sent to the model | Worker UPI IDs and phone numbers are never sent to the LLM |
+| Spoofed payment status | Cashfree webhooks are signature-verified (HMAC-SHA256 over timestamp and raw body) before anything is trusted |
 | Live money by accident | Payouts are refused in production unless `ALLOW_LIVE_PAYOUTS=true` |
 | The wrong person approves | Roles are checked on the server for every request (next section) |
 
@@ -282,7 +282,7 @@ flowchart LR
 ```
 
 - **Login:** Supabase Auth (email and password). `proxy.ts` refreshes the session and sends signed-out visitors to `/login`.
-- **API:** `respond(fn, roles)` in `app/lib/server/http.ts` requires a session for every `/api/*` route (owner or supervisor by default). Money and admin routes pass `OWNER`. The PayPal webhook is the only open route, and it's verified by signature.
+- **API:** `respond(fn, roles)` in `app/lib/server/http.ts` requires a session for every `/api/*` route (owner or supervisor by default). Money and admin routes pass `OWNER`. The Cashfree webhook is the only open route, and it's verified by signature.
 - **Voice:** the executor checks the caller's role before every step, so a supervisor can't approve payouts by voice either ("Only the owner can do that").
 
 ## 8. Data model and rules engine
@@ -301,7 +301,7 @@ erDiagram
         string city
         string role
         number dailyWage
-        string payoutEmail
+        string payoutUpi "name@bank"
         string status
     }
     ATTENDANCE {
@@ -331,9 +331,8 @@ erDiagram
         string id PK
         string payoutId FK
         number amount "INR"
-        number usdAmount "sent to PayPal"
         string status "processing, completed, failed"
-        string batchId "PayPal batch"
+        string transferId "Cashfree transfer_id"
         number attempt
     }
     MEMBER {
@@ -359,20 +358,19 @@ total       = base + overtime + performance + tier bonus + attendance
 
 Every rules change bumps a version, and each payout stores the version and a snapshot of the rules it used, so any amount can be explained later.
 
-## 9. Tech stack and how AI and PayPal are used
+## 9. Tech stack and how AI and Cashfree are used
 
 | Tool | Used for |
 |---|---|
-| **PayPal Payouts API** (REST, sandbox) | Batch payouts after approval, status sync, retries as new attempts, signature-verified webhooks (`PAYMENT.PAYOUTS-ITEM.*`) |
-| **ElevenLabs Scribe** | Speech to text for voice commands |
-| **ElevenLabs TTS** (`eleven_multilingual_v2`) | Spoken replies and payout status updates |
+| **Cashfree Payouts V2** (REST, sandbox) | UPI transfers after approval, beneficiary registration, status sync, retries as new attempts, signature-verified webhooks (`TRANSFER_*`) |
+| **Sarvam AI** | Speech to text for voice commands, and text to speech for spoken replies and payout status updates |
 | **Groq** `openai/gpt-oss-120b`, failover `openai/gpt-oss-20b` | Turns a transcript into an ordered plan, asks follow-up questions, classifies yes/no replies, translates replies. It never calculates or executes |
 | **Supabase Auth** | Logins and roles (owner, supervisor, worker) |
 | **Next.js 16** (App Router, Turbopack, Cache Components), React 19, Tailwind 4, TypeScript | App, API route handlers, server-side service layer |
 
 ## 10. Run it locally
 
-**Requirements:** Node 20+, and sandbox credentials for PayPal, ElevenLabs, Groq and Supabase.
+**Requirements:** Node 20+, and sandbox credentials for Cashfree, Sarvam AI, Groq and Supabase.
 
 ```bash
 npm install
@@ -384,12 +382,10 @@ npm run dev                  # http://localhost:3000
 
 | Variable | Required | What it is |
 |---|---|---|
-| `NEXT_PUBLIC_PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | ✅ | PayPal sandbox app credentials |
-| `NEXT_PUBLIC_PAYPAL_ENVIRONMENT` | ✅ | `sandbox` (production also needs `ALLOW_LIVE_PAYOUTS=true`) |
-| `PAYPAL_WEBHOOK_ID` | optional | Turns on webhook verification; without it, use **Sync** on the Transactions screen |
-| `PAYOUT_CURRENCY`, `INR_PER_USD` | optional | Settlement currency (default USD) and rate (default 85) |
-| `ELEVEN_LABS_API_KEY` | ✅ | Speech to text and text to speech |
-| `ELEVEN_LABS_VOICE_ID`, `ELEVEN_LABS_TTS_MODEL` | optional | Voice and model for spoken replies |
+| `CASHFREE_CLIENT_ID`, `CASHFREE_CLIENT_SECRET` | ✅ | Cashfree **Payouts** API keys (test mode). The secret also verifies webhook signatures |
+| `CASHFREE_ENVIRONMENT` | optional | `sandbox` (default) or `production` (production also needs `ALLOW_LIVE_PAYOUTS=true` and your server IP whitelisted in Cashfree) |
+| `ALLOW_LIVE_PAYOUTS` | optional | Safety switch: payouts are refused in production unless `true` |
+| `SARVAM_API_KEY` | ✅ | Speech to text and text to speech (Sarvam AI) |
 | `GROQ_API_KEY` | ✅ | Voice planner |
 | `GROQ_MODEL`, `VOICE_PLANNER_MODELS` | optional | Planner model and failover order |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | ✅ | Login and roles (the publishable key is safe in the browser) |
@@ -416,17 +412,18 @@ BolPay can pull your employees and attendance from Zoho People, so HR can run pa
 
 Zoho People has no salary data, so new employees get `ZOHO_DEFAULT_DAILY_WAGE` until you edit it. Details: [docs/BUILT.md](docs/BUILT.md) section 12.
 
-### PayPal sandbox setup
-1. At developer.paypal.com create a **US Business** sandbox account (Testing Tools → Sandbox Accounts). Business accounts from some countries, e.g. India, can't send payouts.
-2. Create an app for it (Apps & Credentials), keep **Payouts** enabled, and copy the Client ID and Secret into `.env.local`.
-3. Create US **Personal** sandbox accounts for the workers. The seed data expects `bolpay-worker-1@personal.example.com` … `bolpay-worker-24@personal.example.com`; otherwise edit the PayPal email on the Workers screen.
-4. Amounts are shown in ₹ and settled in USD at `INR_PER_USD` (default 85).
+### Cashfree sandbox setup
+1. Create a Cashfree account at merchant.cashfree.com and switch to **Test mode**.
+2. Go to **Payouts → Developers → API Keys**, generate a Client ID and Client Secret, and put them in `.env` as `CASHFREE_CLIENT_ID` and `CASHFREE_CLIENT_SECRET`.
+3. Add test funds under **Payouts → Balance** so transfers can succeed.
+4. Workers are paid to a **UPI ID** (`name@bank`). The seed data uses Cashfree's sandbox test UPI IDs; edit a worker's UPI ID on the Workers screen. Amounts are in ₹ end to end.
+5. Optional, for webhooks: expose the app with a tunnel (for example `ngrok http 3000`) and add `https://<tunnel>/api/webhooks/cashfree` under **Payouts → Developers → Webhooks**. Without it, the Payouts screen polls Cashfree for status.
 
 ### Try the demo flow
 1. **Sign in as the owner** and look at the 25 seeded Bengaluru riders on **Workers**. You can add riders or import CSVs.
 2. **Incentives:** review the tiered rules (10 / 20 / 30 deliveries → ₹50 / ₹100 / ₹150) and submit the period.
-3. **Payouts:** riders with missing or conflicting records are under **Needs review**. Approve some of the rest; each approval sends a PayPal batch.
-4. **Transactions:** statuses move from *processing* to *completed* automatically (or with **Sync**). A rider with no PayPal email fails with a reason and can be retried.
+3. **Payouts:** riders with missing or conflicting records are under **Needs review**. Approve some of the rest; each approval sends UPI transfers through Cashfree.
+4. **Transactions:** statuses move from *processing* to *completed* automatically (or with **Sync**). A rider with no valid UPI ID fails with a reason and can be retried.
 5. **Voice:** tap the mic and say *"Calculate incentives for all Bengaluru riders who completed at least 20 deliveries today"*, then confirm. Ask *"how many payments failed?"* for a spoken answer. Hindi works too: *"आज रवि कुमार और अनीता शर्मा को अनुपस्थित मार्क करो"*.
 6. **Roles:** sign in as the supervisor and try approving by voice (refused), then as Ravi to see his own pay page.
 
@@ -438,7 +435,7 @@ To reset the data, stop the server and delete the `.data` folder.
 |---|---|
 | `npm run lint` | ESLint |
 | `npm run build` | TypeScript and a production build |
-| `npm run test:voice` | **40 dry-run voice conversations** against the running dev server (nothing is written, PayPal is never called): multi-step flows, clarifications, spoken confirm in English, Hindi and Hinglish, cancel, plan edits, ambiguous and unknown names, rule edits, prompt-injection attempts. Signs in as the demo owner. Currently **40/40** |
+| `npm run test:voice` | **40 dry-run voice conversations** against the running dev server (nothing is written, no payout is ever sent): multi-step flows, clarifications, spoken confirm in English, Hindi and Hinglish, cancel, plan edits, ambiguous and unknown names, rule edits, prompt-injection attempts. Signs in as the demo owner. Currently **40/40** |
 
 Groq's free tier allows 8,000 tokens per minute per model. If cases fail with "the assistant is busy", run slower: `EVAL_PAUSE_MS=8000 npm run test:voice`.
 
@@ -452,15 +449,15 @@ app/
 ├── login/                 Sign-in page and server actions
 ├── api/                   Route handlers: state, workers, attendance, rules, import,
 │                          payouts (submit, decide, sync), transaction retry,
-│                          voice (turn, input, output, metrics), PayPal webhook
+│                          voice (turn, input, output, metrics), Cashfree webhook
 ├── components/merchant/   Shell, sidebar, screens, voice panel
 └── lib/
     ├── server/            service.ts (business logic), db.ts (data store), http.ts (auth + responses)
     ├── voice/             catalog.json, planner, resolver, executor, session, metrics
     ├── merchant/          rules engine (incentives.ts), types, formatting, seed data
-    ├── paypal/            Payouts REST client, webhook verification
+    ├── cashfree/          Payouts V2 REST client, UPI transfers, webhook verification
     ├── auth/, supabase/   session and role checks, Supabase clients
-    └── elevanlabs/        speech to text and text to speech
+    └── elevanlabs/        speech to text and text to speech (being replaced by Sarvam AI)
 supabase/                  migrations (roles, RLS schema) and the seed for demo logins
 scripts/                   voice eval runner and its 40 fixtures
 docs/                      PRD, built, remaining, voice and demo guides
@@ -471,7 +468,7 @@ proxy.ts                   session refresh and login redirect
 
 **Known limitations**
 - App data lives in a JSON file (`.data/db.json`): one server process, not suited to serverless hosting.
-- PayPal sandbox only. Payouts settle in USD (PayPal blocks payouts from the India sender account) and are displayed in ₹.
+- Cashfree sandbox only so far. Payouts are INR by UPI; the live test and production go-live (KYC, IP whitelisting, `ALLOW_LIVE_PAYOUTS`) are still to do.
 - Webhooks are implemented and signature-checked but not yet tested end to end with a public URL; **Sync** covers status updates meanwhile.
 - Voice sessions and metrics are kept in memory and reset on restart.
 - Groq's free-tier rate limit can slow bursts of voice commands (there's automatic failover to a second model).
@@ -480,7 +477,7 @@ proxy.ts                   session refresh and login redirect
 - Move app data to Supabase Postgres (the schema with row-level security is already in `supabase/migrations/`) and host the demo.
 - Daily incentive batches, a batch review screen and an audit log screen.
 - More languages in the eval (Kannada, Tamil, Bengali) and a hands-free voice mode.
-- Reconciliation between internal transactions and PayPal batch items.
+- Reconciliation between internal transactions and Cashfree transfers (settlement reports).
 
 ## Docs
 [Product spec](docs/PRD.md) · [What's built](docs/BUILT.md) · [What's left](docs/REMAINING.md) · [Voice design and manual tests](docs/VOICE.md) · [Demo script](docs/DEMO.md) · [Demo video script](docs/DEMO_VIDEO.md) · [Deploy on Vercel](docs/DEPLOY_VERCEL.md)

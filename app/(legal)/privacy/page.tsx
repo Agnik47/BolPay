@@ -5,7 +5,7 @@ export const metadata: Metadata = { title: "Privacy Policy · BolPay" };
 
 const PROVIDERS = [
   { name: "Supabase", purpose: "Sign-in and account roles", data: "Name, email, password hash, role" },
-  { name: "PayPal", purpose: "Sending approved payouts", data: "Worker PayPal email, payout amount, pay period" },
+  { name: "Cashfree Payments", purpose: "Sending approved payouts", data: "Worker name, phone and UPI ID, payout amount, pay period" },
   { name: "ElevenLabs", purpose: "Speech to text, and spoken replies", data: "Voice recordings, reply text" },
   { name: "Groq", purpose: "Understanding voice and typed commands", data: "Command text, names and cities of active workers" },
 ];
@@ -28,8 +28,8 @@ export default function PrivacyPage() {
       <Section id="collect" title="1. What we collect">
         <List>
           <li><strong className="font-medium text-slate-900">Account details:</strong> name, email address, password (stored only as a hash by our sign-in provider) and your role: owner, supervisor or worker.</li>
-          <li><strong className="font-medium text-slate-900">Worker records</strong> entered by the business: name, job role, city, phone number, PayPal email address, daily wage, start date and status.</li>
-          <li><strong className="font-medium text-slate-900">Work and pay records:</strong> attendance, overtime hours, deliveries or units completed, incentive rules, calculated pay, approval decisions, and PayPal references and statuses.</li>
+          <li><strong className="font-medium text-slate-900">Worker records</strong> entered by the business: name, job role, city, phone number, UPI ID, daily wage, start date and status.</li>
+          <li><strong className="font-medium text-slate-900">Work and pay records:</strong> attendance, overtime hours, deliveries or units completed, incentive rules, calculated pay, approval decisions, and Cashfree references and statuses.</li>
           <li><strong className="font-medium text-slate-900">Voice commands</strong> from owners and supervisors who use the voice assistant: the recording and its text.</li>
           <li><strong className="font-medium text-slate-900">Technical data:</strong> the cookies that keep you signed in, and server logs of errors and request times.</li>
         </List>
@@ -38,7 +38,7 @@ export default function PrivacyPage() {
       <Section id="use" title="2. How we use it">
         <List>
           <li>To calculate pay and incentives, and to show each worker their own earnings and payment history.</li>
-          <li>To send payouts through PayPal after an owner approves them.</li>
+          <li>To send payouts through Cashfree after an owner approves them.</li>
           <li>To understand and carry out voice and typed commands.</li>
           <li>To keep accounts secure and to diagnose problems.</li>
         </List>
@@ -107,7 +107,7 @@ export default function PrivacyPage() {
         <List>
           <li>Passwords are handled by Supabase Auth and are never stored in plain text.</li>
           <li>Data moves over encrypted HTTPS connections.</li>
-          <li>PayPal and other service credentials stay on the server and never reach the browser.</li>
+          <li>Cashfree and other service credentials stay on the server and never reach the browser.</li>
           <li>Payout amounts and recipients are always taken from server records, never from what the browser sends.</li>
         </List>
       </Section>
