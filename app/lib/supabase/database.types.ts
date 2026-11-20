@@ -18,6 +18,11 @@ export type BusinessRow = {
   currency: string;
   period_anchor: string;
   period_length_days: number;
+  business_type: string;
+  city: string;
+  team_size: string;
+  /** { step?, completed_at? }: empty until the owner goes through the onboarding wizard. */
+  onboarding: Json;
   created_at: string;
 };
 
@@ -26,7 +31,23 @@ export type MemberRow = {
   user_id: string;
   role: "owner" | "supervisor" | "worker";
   worker_ref: string | null;
+  display_name: string;
   created_at: string;
+};
+
+export type InviteRow = {
+  id: string;
+  business_id: string;
+  role: "supervisor" | "worker";
+  worker_ref: string | null;
+  invitee_name: string;
+  token_hash: string;
+  created_by: string | null;
+  created_at: string;
+  expires_at: string;
+  used_at: string | null;
+  used_by: string | null;
+  revoked_at: string | null;
 };
 
 export type WorkerRow = {
@@ -123,9 +144,25 @@ export type Database = {
       >;
       transactions: Table<TransactionRow, "business_id" | "payout_id" | "worker_id" | "period_label" | "amount">;
       voice_logs: Table<VoiceLogRow, "business_id" | "transcript">;
+      invites: Table<InviteRow, "business_id" | "role" | "token_hash">;
     };
     Views: { [_ in never]: never };
-    Functions: { [_ in never]: never };
+    Functions: {
+      create_business: {
+        Args: { p_name: string; p_type?: string; p_city?: string; p_team_size?: string; p_period_days?: number };
+        Returns: string;
+      };
+      create_invite: { Args: { p_role: "supervisor" | "worker"; p_worker_ref?: string | null; p_name?: string }; Returns: string };
+      preview_invite: {
+        Args: { p_token: string };
+        Returns: { business_name: string; role: "supervisor" | "worker"; invitee_name: string; inviter_name: string }[];
+      };
+      accept_invite: {
+        Args: { p_token: string };
+        Returns: { business_id: string; role: "supervisor" | "worker"; worker_ref: string | null }[];
+      };
+      revoke_invite: { Args: { p_invite_id: string }; Returns: undefined };
+    };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
   };

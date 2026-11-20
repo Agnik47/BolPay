@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { usePeriodPay, usePeriodRecords, useStore } from "@/app/lib/merchant/store";
 import { formatDateTime, formatMoney } from "@/app/lib/merchant/format";
+import { SetupChecklist } from "../SetupChecklist";
+import { useViewer } from "../viewer";
 import { Avatar, buttonClass, Card, EmptyState, linkClass, Notice, PageHeader, Stat, Stats, StatusBadge, td, th, thRight } from "../ui";
 
 export function DashboardView() {
-  const { workers, today, period, payouts, transactions, workerById } = useStore();
+  const { workers, today, period, payouts, transactions, workerById, loaded } = useStore();
+  const { isOwner, ownBusiness } = useViewer();
   const records = usePeriodRecords();
   const pay = usePeriodPay();
 
@@ -28,6 +31,8 @@ export function DashboardView() {
         description={`Pay period ${period.label}`}
         actions={<Link href="/attendance" className={buttonClass("primary")}>Mark today&apos;s attendance</Link>}
       />
+
+      {isOwner && ownBusiness && loaded && <SetupChecklist />}
 
       <Stats>
         <Stat label="Active workers" value={String(active.length)} hint={`${workers.length - active.length} inactive`} />

@@ -8,6 +8,8 @@ export interface Viewer {
   displayName: string;
   role: ViewerRole;
   businessName: string;
+  /** True for a business that signed up itself (not the seeded demo): it gets the "Finish setup" checklist. */
+  ownBusiness?: boolean;
 }
 
 /**

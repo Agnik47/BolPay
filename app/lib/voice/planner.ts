@@ -1,7 +1,7 @@
 import "server-only";
 import { groqChat, GROQ_MODEL, IntentModelError } from "@/app/lib/ai/intent";
 import { getPeriod, getToday } from "@/app/lib/server/context";
-import { getDb } from "@/app/lib/server/db";
+import { getViewDb } from "@/app/lib/server/db";
 import { CATALOG, planSchema, renderActionDocs, renderExamples, SELECTOR_FILTER_DOCS } from "./catalog";
 import { normalizeRawSteps } from "./resolver";
 import type { PlannerOutput, RawStep } from "./types";
@@ -25,7 +25,7 @@ export interface PlanResult extends PlannerOutput {
  * numbers never go into it.
  */
 export function plannerPrompt(pending: boolean): string {
-  const db = getDb();
+  const db = getViewDb();
   const active = db.workers.filter((w) => w.status === "active");
   const cities = [...new Set(active.map((w) => w.city).filter(Boolean))];
   const rules = CATALOG.promptRules.map((r, i) => `${i + 1}. ${r}`).join("\n");

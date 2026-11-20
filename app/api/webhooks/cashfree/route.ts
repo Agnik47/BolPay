@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { mapTransferStatus, verifyBodySignature, verifyWebhookSignature } from "@/app/lib/cashfree/payouts";
+import { mapTransferStatus, verifyBodySignature, verifyWebhookSignature, webhookTimestampFresh } from "@/app/lib/cashfree/payouts";
 import { applyWebhookTransfer } from "@/app/lib/server/service";
 
 interface TransferEvent {
@@ -53,6 +53,10 @@ export async function POST(req: Request) {
   const signedByHeader = verifyWebhookSignature(raw, req.headers.get("x-webhook-signature"), req.headers.get("x-webhook-timestamp"));
   if (!signedByHeader && !verifyBodySignature(body)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  }
+  // A validly signed event that is too old is a replay (V1 body-style events carry no timestamp, so they rely on the status rules).
+  if (signedByHeader && !webhookTimestampFresh(req.headers.get("x-webhook-timestamp"))) {
+    return NextResponse.json({ error: "Stale webhook" }, { status: 400 });
   }
 
   // Idempotent: replaying an event re-applies the same status.

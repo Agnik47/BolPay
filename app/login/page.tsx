@@ -3,7 +3,9 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getSession, homeFor } from "@/app/lib/auth/dal";
-import { BrandMark } from "@/app/components/icons";
+import { Mic } from "@/app/components/onboarding/art";
+import { Sub, Title } from "@/app/components/onboarding/kit";
+import { Stage } from "@/app/components/onboarding/Stage";
 import { LoginForm } from "./LoginForm";
 
 export const metadata: Metadata = { title: "Sign in · BolPay" };
@@ -17,34 +19,19 @@ async function RedirectIfSignedIn(): Promise<null> {
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-canvas px-4 py-6">
-      <main className="w-full max-w-[22rem] rounded-xl border border-slate-200 bg-white p-6 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
-        <div className="flex items-center gap-2.5">
-          <BrandMark className="size-8" />
-          <span className="text-base font-semibold tracking-tight text-slate-900">BolPay</span>
-        </div>
-        <h1 className="mt-4 text-lg font-semibold tracking-tight text-slate-900">Sign in</h1>
-        <p className="mt-0.5 text-sm text-slate-500">Attendance, payroll and UPI payouts.</p>
-
-        <div className="mt-4">
-          <Suspense>
-            <RedirectIfSignedIn />
-          </Suspense>
-          <LoginForm />
-        </div>
-
-        <p className="mt-4 border-t border-slate-100 pt-3.5 text-xs text-slate-500">
-          Invite-only. Ask your business owner for access.
-        </p>
-      </main>
-
-      <footer className="flex items-center gap-3 text-xs text-slate-500">
-        <span>© 2026 BolPay</span>
-        <span aria-hidden className="text-slate-300">·</span>
-        <Link href="/terms" className="hover:text-slate-900">Terms</Link>
-        <span aria-hidden className="text-slate-300">·</span>
-        <Link href="/privacy" className="hover:text-slate-900">Privacy</Link>
-      </footer>
-    </div>
+    <Stage stepKey="login">
+      <Mic className="mx-auto mb-2 h-32 drop-shadow-[0_14px_18px_rgba(22,21,43,0.22)]" />
+      <Title accent="back">Welcome back.</Title>
+      <Sub>Sign in to run today&apos;s attendance and payouts.</Sub>
+      <Suspense>
+        <RedirectIfSignedIn />
+      </Suspense>
+      <LoginForm />
+      <p className="mt-8 text-center text-sm text-[#16152b]/55">
+        New to BolPay? <Link href="/signup" className="font-semibold text-[#16152b] hover:underline">Create a business account</Link>
+        <span aria-hidden className="mx-2 text-[#16152b]/25">·</span>
+        Invited? <Link href="/join" className="font-semibold text-[#16152b] hover:underline">Join</Link>
+      </p>
+    </Stage>
   );
 }

@@ -2,7 +2,7 @@ import "server-only";
 import { formatDate } from "@/app/lib/merchant/format";
 import { getPeriod, getToday } from "@/app/lib/server/context";
 import type { Worker } from "@/app/lib/merchant/types";
-import { getDb } from "@/app/lib/server/db";
+import { getViewDb } from "@/app/lib/server/db";
 import type { Selector } from "./types";
 
 export const norm = (s: string) =>
@@ -40,7 +40,7 @@ export interface SelOptions {
 }
 
 function knownCities(): string[] {
-  return [...new Set(getDb().workers.filter((w) => w.status === "active").map((w) => w.city).filter(Boolean))];
+  return [...new Set(getViewDb().workers.filter((w) => w.status === "active").map((w) => w.city).filter(Boolean))];
 }
 
 export function matchCity(name: string): string | null {
@@ -53,7 +53,7 @@ const listNames = (ws: Worker[]) => (ws.length <= 4 ? ws.map((w) => w.name).join
 
 /** Resolves a spoken target into real worker records. Never trusts the model for who is included. */
 export function resolveSelector(sel: Selector | null, o: SelOptions): SelResult {
-  const db = getDb();
+  const db = getViewDb();
   const pool = db.workers.filter((w) => o.includeInactive || w.status === "active");
   let picked: Worker[];
   let label: string;

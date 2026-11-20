@@ -4,6 +4,7 @@ import { WorkerSkeleton } from "@/app/components/Skeleton";
 import { Brand } from "@/app/components/icons";
 import { SiteFooter } from "@/app/components/SiteFooter";
 import { requireRole } from "@/app/lib/auth/dal";
+import { runInWorkspace, workspaceForBusiness } from "@/app/lib/server/db";
 import { getSnapshot } from "@/app/lib/server/service";
 import { calculatePay } from "@/app/lib/merchant/incentives";
 import { dateRange, formatDate, formatDateTime, formatMoney } from "@/app/lib/merchant/format";
@@ -32,8 +33,8 @@ export default function MyPayPage() {
 /** A worker's own view: attendance, earnings so far and payment history (proof of income). */
 async function MyPay() {
   const session = await requireRole(["worker"]);
-  // Only this worker's records leave the server.
-  const snap = getSnapshot();
+  // Only this worker's records leave the server, read from their own business's data.
+  const snap = runInWorkspace(workspaceForBusiness(session.business.id, "demo"), () => getSnapshot());
   const worker = snap.workers.find((w) => w.id === session.workerRef);
 
   const header = (

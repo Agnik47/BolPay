@@ -2,7 +2,7 @@ import "server-only";
 import { formatDate, formatMoney } from "@/app/lib/merchant/format";
 import { calculatePay } from "@/app/lib/merchant/incentives";
 import { getPeriod, getToday } from "@/app/lib/server/context";
-import { getDb } from "@/app/lib/server/db";
+import { getViewDb } from "@/app/lib/server/db";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const some = (names: string[], max = 6) => (names.length <= max ? names.join(", ") : `${names.slice(0, max).join(", ")} and ${names.length - max} more`);
@@ -12,7 +12,7 @@ const some = (names: string[], max = 6) => (names.length <= max ? names.join(", 
  * picks which question is being asked.
  */
 export function answerQuery(kind: string, o: { workerIds: string[] | null; date: string; n: number | null }): string {
-  const db = getDb();
+  const db = getViewDb();
   const nameOf = (id: string) => db.workers.find((w) => w.id === id)?.name ?? "Unknown";
   const txs = db.transactions.filter((t) => t.periodLabel === getPeriod().label);
   const payouts = db.payouts.filter((p) => p.periodId === getPeriod().id);

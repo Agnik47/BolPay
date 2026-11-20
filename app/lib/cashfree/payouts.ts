@@ -155,6 +155,19 @@ export function verifyBodySignature(body: Record<string, unknown>): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * Replay window for signed webhooks: false when the x-webhook-timestamp is older (or further in the future) than
+ * `maxSkewMs`. Accepts epoch seconds, epoch milliseconds or a date string. A value in a format we can't read is
+ * let through: the signature already vouches for it and the status rules in applyWebhookTransfer stop stale events.
+ */
+export function webhookTimestampFresh(timestamp: string | null, maxSkewMs = 5 * 60_000, now = Date.now()): boolean {
+  if (!timestamp) return false;
+  const n = Number(timestamp);
+  const sentAt = Number.isFinite(n) ? (n < 1e11 ? n * 1000 : n) : Date.parse(timestamp);
+  if (!Number.isFinite(sentAt)) return true;
+  return Math.abs(now - sentAt) <= maxSkewMs;
+}
+
 /** Verifies x-webhook-signature: base64(HMAC-SHA256(timestamp + rawBody, client secret)). */
 export function verifyWebhookSignature(rawBody: string, signature: string | null, timestamp: string | null): boolean {
   const secret = process.env.CASHFREE_CLIENT_SECRET;

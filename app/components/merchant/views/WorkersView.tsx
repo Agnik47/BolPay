@@ -1,19 +1,47 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/app/lib/merchant/store";
 import { useViewer } from "../viewer";
 import { formatDate, formatMoney } from "@/app/lib/merchant/format";
 import type { Worker } from "@/app/lib/merchant/types";
+import { InviteLinkCard } from "../../onboarding/kit";
+import { assignTeam, createInvite, listSupervisors } from "@/app/onboarding/actions";
 import { useToast } from "../../feedback/Toaster";
 import { Avatar, Button, Card, EmptyState, Field, fieldClass, inputClass, PageHeader, StatusBadge, td, th, thRight } from "../ui";
 
 const EMPTY = { name: "", role: "Delivery Rider", city: "Bengaluru", phone: "", payoutUpi: "", dailyWage: "" };
 
 export function WorkersView() {
-  const { workers, addWorker, updateWorker, importCsv } = useStore();
-  const { isOwner } = useViewer();
+  const { workers, addWorker, updateWorker, importCsv, applySnapshot } = useStore();
+  const { isOwner, businessName } = useViewer();
   const toast = useToast();
+  const [supervisors, setSupervisors] = useState<{ id: string; name: string }[]>([]);
+  const [invite, setInvite] = useState<{ path: string; name: string } | null>(null);
+  const [showSupForm, setShowSupForm] = useState(false);
+  const [supName, setSupName] = useState("");
+  const [inviting, setInviting] = useState(false);
+
+  useEffect(() => {
+    if (isOwner) void listSupervisors().then(setSupervisors);
+  }, [isOwner]);
+
+  async function makeInvite(input: { role: "supervisor" | "worker"; workerId?: string; name?: string }) {
+    setInviting(true);
+    const r = await createInvite(input);
+    setInviting(false);
+    if (!r.ok) return toast({ tone: "error", title: "Couldn't create the invite", description: r.error });
+    setInvite({ path: r.path, name: r.name });
+    setShowSupForm(false);
+    setSupName("");
+  }
+
+  async function assign(w: Worker, supervisorId: string) {
+    const r = await assignTeam([w.id], supervisorId || null);
+    if (!r.ok) return toast({ tone: "error", title: "Couldn't update the team", description: r.error });
+    const d = (await fetch("/api/state").then((x) => x.json()).catch(() => null)) as { state?: Parameters<typeof applySnapshot>[0] } | null;
+    if (d?.state) applySnapshot(d.state);
+  }
   const [city, setCity] = useState("all");
   const workersFile = useRef<HTMLInputElement>(null);
   const deliveriesFile = useRef<HTMLInputElement>(null);
@@ -86,10 +114,26 @@ export function WorkersView() {
             <input ref={deliveriesFile} type="file" accept=".csv,text/csv" hidden onChange={(e) => void onFile("deliveries", e.target.files?.[0])} />
             <Button onClick={() => workersFile.current?.click()} title="Columns: name, role, city, phone, payoutUpi, dailyWage">Import workers</Button>
             <Button onClick={() => deliveriesFile.current?.click()} title="Columns: worker, date, deliveries, status, overtime">Import deliveries</Button>
+            <Button onClick={() => setShowSupForm((s) => !s)} aria-expanded={showSupForm}>Invite supervisor</Button>
             <Button variant="primary" onClick={() => setShowForm((s) => !s)} aria-expanded={showForm}>{showForm ? "Cancel" : "Add worker"}</Button>
           </>
         }
       />
+      {showSupForm && (
+        <Card title="Invite a supervisor" className="mb-5">
+          <form className="flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); void makeInvite({ role: "supervisor", name: supName }); }}>
+            <div className="w-full max-w-xs"><Field label="Their name" hint="Shown to them when they open the link."><input className={inputClass} value={supName} onChange={(e) => setSupName(e.target.value)} required minLength={2} maxLength={80} /></Field></div>
+            <Button type="submit" variant="primary" disabled={inviting || supName.trim().length < 2}>{inviting ? "Creating…" : "Create invite link"}</Button>
+            <Button variant="ghost" onClick={() => setShowSupForm(false)}>Cancel</Button>
+          </form>
+        </Card>
+      )}
+      {invite && (
+        <div className="mb-5 max-w-xl">
+          <InviteLinkCard path={invite.path} name={invite.name} businessLabel={businessName} />
+          <Button variant="ghost" size="sm" className="mt-2" onClick={() => setInvite(null)}>Done</Button>
+        </div>
+      )}
       {showForm && (
         <Card title="New worker" className="mb-5">
           <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -120,7 +164,7 @@ export function WorkersView() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px]">
               <thead>
-                <tr><th className={th}>Worker</th><th className={th}>Role</th><th className={thRight}>Daily wage</th><th className={th}>UPI ID</th><th className={th}>Joined</th><th className={th}>Status</th><th className={th}><span className="sr-only">Actions</span></th></tr>
+                <tr><th className={th}>Worker</th><th className={th}>Role</th><th className={thRight}>Daily wage</th><th className={th}>UPI ID</th><th className={th}>Joined</th>{isOwner && <th className={th}>Supervisor</th>}<th className={th}>Status</th><th className={th}><span className="sr-only">Actions</span></th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {shown.map((w) => (
@@ -146,8 +190,28 @@ export function WorkersView() {
                     </td>
                     <td className={`${td} max-w-[13rem] truncate`}>{w.payoutUpi || <span className="text-xs font-medium text-rose-700">Missing</span>}</td>
                     <td className={`${td} whitespace-nowrap`}>{formatDate(w.joinedOn)}</td>
+                    {isOwner && (
+                      <td className={td}>
+                        <select
+                          className={fieldClass("h-7 w-auto min-w-[8rem] px-2 text-xs")}
+                          aria-label={`Supervisor for ${w.name}`}
+                          value={supervisors.some((s) => s.id === w.supervisorId) ? w.supervisorId : ""}
+                          onChange={(e) => void assign(w, e.target.value)}
+                          disabled={supervisors.length === 0}
+                          title={supervisors.length === 0 ? "Invite a supervisor first" : undefined}
+                        >
+                          <option value="">Unassigned</option>
+                          {supervisors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </td>
+                    )}
                     <td className={td}><StatusBadge status={w.status} /></td>
                     <td className={`${td} text-right`}>
+                      {w.status === "active" && (
+                        <Button variant="ghost" size="sm" disabled={inviting} onClick={() => void makeInvite({ role: "worker", workerId: w.id })} title="Create a one-time link so this worker can sign in and see their pay">
+                          Invite
+                        </Button>
+                      )}
                       {isOwner && (
                         <Button variant="ghost" size="sm" onClick={() => toggleActive(w)}>
                           {w.status === "active" ? "Deactivate" : "Reactivate"}

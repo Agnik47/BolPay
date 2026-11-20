@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/terms", "/privacy"];
+// /signup and /join are how a person becomes an owner / is let in by an invite; /onboarding stays protected.
+const PUBLIC_PATHS = ["/login", "/signup", "/join", "/terms", "/privacy"];
 
 /**
  * Refreshes the Supabase session cookie on every request and sends signed-out

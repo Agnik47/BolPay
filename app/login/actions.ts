@@ -18,10 +18,8 @@ export async function signIn(_prev: LoginState, formData: FormData): Promise<Log
   if (error || !data.user) return { error: "Wrong email or password.", email };
 
   const { data: member } = await supabase.from("members").select("role").eq("user_id", data.user.id).limit(1).maybeSingle();
-  if (!member) {
-    await supabase.auth.signOut();
-    return { error: "This account isn't linked to a business yet. Ask the owner to add you.", email };
-  }
+  // Signed up but never finished creating a business: carry on with setup instead of turning them away.
+  if (!member) redirect("/onboarding");
 
   // "/" sends each role to its own home page.
   redirect("/");
