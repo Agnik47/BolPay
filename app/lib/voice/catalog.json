@@ -9,6 +9,7 @@
     "needs_review": "workers whose payout is flagged Needs Review"
   },
   "queryKinds": {
+    "help": "what this assistant can do and how to use it: any question about its abilities, commands, examples or how to get help",
     "payout_summary": "overall payout and payment progress for the period",
     "failed_payments": "which payments failed and why",
     "pending_payouts": "payouts waiting for approval and payments still processing",
@@ -817,6 +818,7 @@
     ]
   },
   "promptRules": [
+    "A question about what you can do, what commands exist, how to use the assistant, or a plain request for help is a query step with kind help. It is never notUnderstood.",
     "Output ordered steps; they run top to bottom in the order spoken (mark attendance before preparing payouts, prepare before approving).",
     "One step per action per distinct target. 'Mark Ravi and Anita absent' is one step with two names; 'Ravi present and Anita absent' is two steps.",
     "Targets use the selector: scope names, all (everyone; use except for 'everyone but X'), city, or filter.",
