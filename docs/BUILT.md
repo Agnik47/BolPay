@@ -1,6 +1,6 @@
 # What is built so far
 
-Updated 2026-11-20 (payments moved from PayPal to Cashfree; speech moving to Sarvam AI). PRD section numbers refer to [PRD.md](./PRD.md). What is left: [REMAINING.md](./REMAINING.md). Voice details: [VOICE.md](./VOICE.md). Manual test and demo script: [DEMO.md](./DEMO.md).
+Updated 2026-11-20 (payments moved from PayPal to Cashfree; speech moved to Sarvam AI). PRD section numbers refer to [PRD.md](./PRD.md). What is left: [REMAINING.md](./REMAINING.md). Voice details: [VOICE.md](./VOICE.md). Manual test and demo script: [DEMO.md](./DEMO.md).
 
 ## 1. Summary
 
@@ -57,7 +57,7 @@ Updated 2026-11-20 (payments moved from PayPal to Cashfree; speech moving to Sar
 | `POST /api/payouts/sync` | Pull transfer statuses from Cashfree |
 | `POST /api/transactions/[id]/retry` | Retry a failed payment |
 | `POST /api/webhooks/cashfree` | Signature-verified `TRANSFER_*` events (HMAC-SHA256 of timestamp and raw body) |
-| `POST /api/voice-input`, `/api/voice-output` | Speech-to-text and text-to-speech (moving from ElevenLabs to Sarvam AI; the routes stay the same) |
+| `POST /api/voice-input`, `/api/voice-output` | Speech-to-text and text-to-speech (Sarvam AI; client in `app/lib/sarvam/`) |
 | `POST/GET /api/voice/turn` | One conversational turn; restore a session |
 | `GET/DELETE /api/voice/metrics` | Voice quality metrics |
 | `GET/POST /api/workspace` | Which dataset is active; owners switch between `demo` and `zoho` |
@@ -146,7 +146,7 @@ Lets a business that runs HR on Zoho People start paying through BolPay without 
 - **Recipients.** Workers have a UPI ID (`payoutUpi`) instead of a PayPal email. `schemaVersion` was bumped, so older data files reseed.
 - **Removed with PayPal:** the *awaiting sign-up* (`unclaimed`) status, *cancel and refund*, the PayPal accounts card on Integrations, sandbox-email assignment and the sandbox-accounts CSV export. UPI has no equivalent states: a transfer either succeeds, fails or is still processing.
 - **Open:** run the sandbox flow (see section 2), register the webhook, and decide how to handle UPI limits for large payouts.
-- **Speech.** The ElevenLabs speech-to-text and text-to-speech calls are being replaced with Sarvam AI by a teammate. Until that lands the code still reads the ElevenLabs variables; the docs describe the target setup.
+- **Speech.** Sarvam AI does speech-to-text (`saaras:v4`, language auto-detected) and text-to-speech (`bulbul:v3`). TTS has no auto-detect, so `app/lib/sarvam/languages.ts` picks the language from the reply text (the planner's language is only a hint): English fallbacks are spoken as English, and Urdu (no Sarvam voice) gets a 422 so the reply is text only. Replies are WAV; numbers over four digits get commas as Sarvam asks. The recorder stops at 28 s because REST speech-to-text is meant for clips under about 30 s, and one retry covers a 429 or 503.
 - **Unchanged:** the Zoho import sync fix and screen-refresh work from the earlier session still apply (a sync now hands fresh server data to the screens).
 
 ## 14. Final additions before submission (2026-11-12)
@@ -154,9 +154,9 @@ Lets a business that runs HR on Zoho People start paying through BolPay without 
 - **AG Grid attendance history.** AG Grid Community (MIT) data grid, themed to the app, paginated, sortable, filterable and exportable, loaded on demand (`next/dynamic`) because it is large. Enterprise features (Excel export, grouping, set filter) are deliberately not used.
 - **Clearer feedback.** Toasts for Zoho sync, disconnect and completed or failed payments.
 - **Hosting.** `DATA_DIR` moves the JSON files (and the Zoho token store) to a writable folder for hosts such as Vercel. A hosted deployment was **not** performed here; see [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md) for the steps and the limits of `/tmp` storage.
-- **Demo video kit.** [DEMO_VIDEO.md](./DEMO_VIDEO.md) has the narration script, a timed shot list built from measured clip lengths, recording, narration and editing steps, and ready-to-paste YouTube and project description text. `docs/demo-video/narration.json` holds the clips as data and `scripts/demo-narration.mjs` renders them. The narration and manager voice clips are to be regenerated with Sarvam AI, and the shot list re-timed once the Cashfree screens are recorded.
+- **Demo video kit.** [DEMO_VIDEO.md](./DEMO_VIDEO.md) has the narration script, a timed shot list built from measured clip lengths, recording, narration and editing steps, and ready-to-paste YouTube and project description text. `docs/demo-video/narration.json` holds the clips as data and `scripts/demo-narration.mjs` renders them. `scripts/demo-narration.mjs` now renders the clips with Sarvam AI (WAV). Regenerate them, and re-time the shot list re-timed once the Cashfree screens are recorded.
 - **Checked for the video:** the three demo voice commands plan correctly against the real planner (dry run), the approve step pauses at the exact-amount checkpoint, and "Yes, go ahead" confirms by voice.
 
 ## 15. State at submission
 **Working and verified:** voice-driven multi-step flows with exact-amount checkpoints (40 of 40 eval fixtures, plus real runs), Needs Review safeguards, roles and sign-in, Zoho People import against a live portal (20 employees, 150 attendance records), two datasets with per-person switching.
-**Not verified or not done:** Cashfree payouts end to end and webhooks (need the Payouts keys and a public URL), the Sarvam AI speech integration, a real-microphone take (record it as part of the video), Kannada, Tamil and Bengali speech, a hosted deployment, and a production build run in this session (the team reported it passing). Open work is in [REMAINING.md](./REMAINING.md).
+**Not verified or not done:** Cashfree payouts end to end and webhooks (need the Payouts keys and a public URL), the Sarvam AI speech integration against the live API (written from the docs; the first real call should confirm the audio format and the speech-to-text behaviour), a real-microphone take (record it as part of the video), Kannada, Tamil and Bengali speech, a hosted deployment, and a production build run in this session (the team reported it passing). Open work is in [REMAINING.md](./REMAINING.md).

@@ -1,6 +1,6 @@
 # What is remaining
 
-Updated 2026-11-07. **Status updates: 2026-11-11, 2026-11-12 and 2026-11-20** (see the list just below). **2026-11-20: payments moved from PayPal to Cashfree Payouts (UPI, INR) and speech moves from ElevenLabs to Sarvam AI (teammate's work). Rows below that still mention the old provider have been rewritten; the code now has no PayPal.**
+Updated 2026-11-07. **Status updates: 2026-11-11, 2026-11-12 and 2026-11-20** (see the list just below). **2026-11-20: payments moved from PayPal to Cashfree Payouts (UPI, INR) and speech moved from ElevenLabs to Sarvam AI. Rows below that still mention the old provider have been rewritten; the code now has no PayPal.**
 
 **Done on 2026-11-12 (second update):**
 - (Superseded by the Cashfree migration: UPI has no unclaimed state, cancel-and-refund or sandbox-account tooling.) Screens refresh after a Zoho sync.
@@ -208,7 +208,7 @@ Size: **S** under 1 hour, **M** a few hours, **L** a day or more. Owners follow 
 | T-02 | P1 | S | Backend | Remove dead code: `/api/intent`, `app/lib/ai/intent.ts` (single-intent path: keep `groqChat`), `voice-commands.ts`, `intent-types.ts` pieces still used only by them. |
 | T-03 | P1 | S | Frontend | The `/checkout` page uses a placeholder `"guest"` user and is not part of the main flow; integrate (P-10) or remove. |
 | T-04 | P1 | S | Backend | Remove unused `i` and `npm` dependencies from `package.json`. |
-| T-05 | P1 | S | Backend | Rename the `app/lib/elevanlabs` folder (typo) as part of the Sarvam AI swap, which replaces it. |
+| T-05 | P1 | S | Backend | ~~Rename the `app/lib/elevanlabs` folder (typo)~~ Done: replaced by `app/lib/sarvam/` in the Sarvam AI swap. |
 | T-06 | P2 | S | Backend | Add `.gitattributes` (LF normalisation; git warns about CRLF on every commit), and ignore `.playwright-mcp/`, `.data_backup/`. |
 | T-07 | P2 | S | Backend | `next.config.ts`: confirm no experimental flags are needed for production; check `next build` succeeds (not run in this session). |
 | T-08 | P2 | S | Backend | **Run `next build`** and fix anything the dev server hid (the Turbopack stale-module issue only shows in dev). |

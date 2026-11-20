@@ -1,5 +1,5 @@
 {
-  "model": "sarvam-tts (set when the Sarvam AI script replaces scripts/demo-narration.mjs)",
+  "model": "bulbul:v3",
   "note": "Narrator clips N1..N10 are the voice-over. Manager clips M1..M4 are the spoken voice commands. Any square-bracket tags are delivery directions written for the previous voice model; Sarvam AI may read them aloud, so delete them if you hear one. Text updated for the Cashfree flow; re-measure every clip after generating.",
   "narrator": [
     {

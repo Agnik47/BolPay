@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: "Privacy Policy · BolPay" };
 const PROVIDERS = [
   { name: "Supabase", purpose: "Sign-in and account roles", data: "Name, email, password hash, role" },
   { name: "Cashfree Payments", purpose: "Sending approved payouts", data: "Worker name, phone and UPI ID, payout amount, pay period" },
-  { name: "ElevenLabs", purpose: "Speech to text, and spoken replies", data: "Voice recordings, reply text" },
+  { name: "Sarvam AI", purpose: "Speech to text, and spoken replies", data: "Voice recordings, reply text" },
   { name: "Groq", purpose: "Understanding voice and typed commands", data: "Command text, names and cities of active workers" },
 ];
 
@@ -47,9 +47,9 @@ export default function PrivacyPage() {
 
       <Section id="voice" title="3. Voice commands">
         <List>
-          <li>Audio is sent to ElevenLabs to be turned into text. BolPay does not keep the recording.</li>
+          <li>Audio is sent to Sarvam AI to be turned into text. BolPay does not keep the recording.</li>
           <li>The text of the command, together with the names and cities of active workers, is sent to Groq so the request can be matched to the right people.</li>
-          <li>The assistant&apos;s replies are spoken using ElevenLabs text-to-speech.</li>
+          <li>The assistant&apos;s replies are spoken using Sarvam AI text-to-speech.</li>
           <li>An unfinished conversation is held in server memory for up to 15 minutes, and in your browser tab until you close it or start a new conversation.</li>
           <li>Usage metrics for the assistant record counts and timings, not what was said.</li>
         </List>

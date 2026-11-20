@@ -108,9 +108,9 @@ Option if you do not want to speak on camera: type M1 to M3 into the box in the 
 ## 6. Generate the narration with Sarvam AI
 
 1. Choose an Indian-English voice in Sarvam AI's text-to-speech and keep the pace natural.
-2. Paste each clip's text from section 3 (N1 first), generate, listen, and save as `N1.mp3` and so on. One clip per generation; re-generate any that sound rushed.
+2. Paste each clip's text from section 3 (N1 first), generate, listen, and save as `N1.wav` and so on. One clip per generation; re-generate any that sound rushed.
 3. Write each clip's length next to its id and update the timeline (section 4).
-4. `scripts/demo-narration.mjs` still calls the previous voice provider. It is replaced as part of the Sarvam AI integration; until then generate clips by hand. The clip texts live in `docs/demo-video/narration.json`.
+4. `node scripts/demo-narration.mjs` generates every clip with Sarvam AI (`NARRATOR_SPEAKER`, `MANAGER_SPEAKER`, see the header of the script), saves WAV files in `demo-assets/audio/` and prints each clip's length. The clip texts live in `docs/demo-video/narration.json`.
 
 ## 7. Edit it together (CapCut, DaVinci Resolve or Clipchamp)
 

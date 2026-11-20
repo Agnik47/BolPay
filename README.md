@@ -457,7 +457,7 @@ app/
     ├── merchant/          rules engine (incentives.ts), types, formatting, seed data
     ├── cashfree/          Payouts V2 REST client, UPI transfers, webhook verification
     ├── auth/, supabase/   session and role checks, Supabase clients
-    └── elevanlabs/        speech to text and text to speech (being replaced by Sarvam AI)
+    └── sarvam/            Sarvam AI speech to text and text to speech, plus language picking for TTS
 supabase/                  migrations (roles, RLS schema) and the seed for demo logins
 scripts/                   voice eval runner and its 40 fixtures
 docs/                      PRD, built, remaining, voice and demo guides

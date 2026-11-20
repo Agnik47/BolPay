@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { transcribeAudio } from "@/app/lib/elevanlabs/client";
+import { SarvamError, transcribeAudio } from "@/app/lib/sarvam/client";
 import { guard, STAFF } from "@/app/lib/server/http";
 
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -9,12 +9,12 @@ const MAX_BYTES = 10 * 1024 * 1024;
  * Accepts either:
  *  - multipart/form-data with an `audio` file field, or
  *  - JSON `{ audio: "<base64>", mimeType?: "audio/webm" }`
- * Returns `{ text }`.
+ * Returns `{ text }`. Sarvam's REST speech-to-text is meant for clips under about 30 seconds.
  */
 export async function POST(req: Request) {
   const denied = await guard(STAFF);
   if (denied) return denied;
-  if (!process.env.ELEVEN_LABS_API_KEY) {
+  if (!process.env.SARVAM_API_KEY) {
     return NextResponse.json({ error: "Speech-to-text is not configured." }, { status: 503 });
   }
 
@@ -46,7 +46,13 @@ export async function POST(req: Request) {
     const text = (await transcribeAudio(audio)).trim();
     return NextResponse.json({ text });
   } catch (err) {
-    console.error("voice-input transcription failed", err);
+    console.error("voice-input transcription failed", err instanceof Error ? err.message : err);
+    if (err instanceof SarvamError && err.status === 429) {
+      return NextResponse.json({ error: "Speech-to-text is busy. Try again in a moment." }, { status: 429 });
+    }
+    if (err instanceof SarvamError && err.status === 400) {
+      return NextResponse.json({ error: "That recording couldn't be read. Keep commands under 30 seconds." }, { status: 422 });
+    }
     return NextResponse.json({ error: "Transcription failed." }, { status: 502 });
   }
 }

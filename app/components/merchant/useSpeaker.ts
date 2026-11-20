@@ -30,11 +30,11 @@ const writeEnabled = (on: boolean) => {
   listeners.forEach((l) => l());
 };
 
-export type SpeakResult = "played" | "blocked" | "unavailable";
+export type SpeakResult = "played" | "blocked" | "unsupported" | "unavailable";
 
 /**
- * Reads assistant replies aloud via /api/voice-output (ElevenLabs).
- * Failures never throw: callers show the reply as text regardless.
+ * Reads assistant replies aloud via /api/voice-output (Sarvam AI). `language` is the planner's language hint.
+ * Failures never throw: callers show the reply as text regardless. "unsupported" means no voice for the language.
  */
 export function useSpeaker() {
   const enabled = useSyncExternalStore(subscribe, readEnabled, () => true);
@@ -55,7 +55,7 @@ export function useSpeaker() {
   useEffect(() => stop, [stop]);
 
   const speak = useCallback(
-    async (text: string, opts: { force?: boolean } = {}): Promise<SpeakResult> => {
+    async (text: string, opts: { force?: boolean; language?: string } = {}): Promise<SpeakResult> => {
       if ((!enabled && !opts.force) || !text.trim()) return "unavailable";
       stop();
       const id = requestId.current;
@@ -63,8 +63,9 @@ export function useSpeaker() {
         const res = await fetch("/api/voice-output", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, language: opts.language }),
         });
+        if (res.status === 422) return "unsupported";
         if (!res.ok) return "unavailable";
         const blob = await res.blob();
         if (id !== requestId.current) return "unavailable"; // superseded by a newer reply or stop()

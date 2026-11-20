@@ -5,7 +5,7 @@
 ## 0. Progress log
 
 - **2026-11-11:** auth (Supabase Auth: owner, supervisor, worker), voice planner, JSON data store, Zoho People import. See [BUILT.md](./BUILT.md).
-- **2026-11-20:** payments moved from PayPal to **Cashfree Payouts (UPI, INR)** on branch `feature/cashfree-integration`. Code and docs no longer mention PayPal. Speech is moving from ElevenLabs to **Sarvam AI**; that swap is a teammate's work, so the code still reads the ElevenLabs variables until it lands.
+- **2026-11-20:** payments moved from PayPal to **Cashfree Payouts (UPI, INR)** on branch `feature/cashfree-integration`. Code and docs no longer mention PayPal. Speech moved from ElevenLabs to **Sarvam AI** (`app/lib/sarvam/`); it has not yet been run against the live API.
 
 ## 1. What this project is
 
@@ -28,7 +28,7 @@
 
 - `CASHFREE_CLIENT_ID`, `CASHFREE_CLIENT_SECRET`: Payouts API keys, test mode (dashboard → Payouts → Developers → API Keys). The secret also verifies webhook signatures. The Cashfree MCP cannot return these; the owner copies them once.
 - `CASHFREE_ENVIRONMENT=sandbox` (default). `ALLOW_LIVE_PAYOUTS` must stay unset; payouts are refused in production unless it is `true`.
-- Speech: `SARVAM_API_KEY` once the Sarvam AI swap lands (until then `ELEVEN_LABS_*` in code).
+- Speech: `SARVAM_API_KEY` (optional `SARVAM_STT_MODEL`, `SARVAM_TTS_MODEL`, `SARVAM_TTS_SPEAKER`).
 - `GROQ_API_KEY`, Supabase keys, optional Zoho keys: see `.env.example`.
 
 ## 4. Tooling
@@ -41,7 +41,7 @@
 1. **Live sandbox test** once keys and test funds (Payouts → Balance) are in place: approve a payout to `success@upi` and confirm it reaches `completed` via sync; then `failure@upi`; then a worker with no UPI ID; then retry (attempt 2); then a duplicate approval from two tabs (one transfer only).
 2. **Webhooks:** tunnel the app, register `/api/webhooks/cashfree`, confirm `TRANSFER_SUCCESS` updates a transaction and that a forged signature returns 400.
 3. **UPI limits:** Cashfree documents ₹10,000 to ₹1 lakh per UPI transfer depending on the bank; decide how to handle larger payouts.
-4. **Sarvam AI swap** (teammate): replace `app/lib/elevanlabs/` and the voice routes; do not start it unasked.
+4. **Sarvam AI check:** the swap is in the code; run a real recording and a spoken reply with a live key (see V-02).
 5. **Supabase schema:** rename the `paypal_*` transaction columns when moving data to Postgres (REMAINING Z-18).
 6. Re-record the demo video once the Cashfree flow works (the shot list in [DEMO_VIDEO.md](./DEMO_VIDEO.md) was written for the old screens).
 

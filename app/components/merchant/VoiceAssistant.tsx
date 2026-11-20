@@ -29,6 +29,7 @@ interface TurnView {
   awaiting: "reply" | "confirm" | null;
   navigate?: string;
   checkpoint?: boolean;
+  language?: string;
 }
 
 interface Message {
@@ -38,6 +39,8 @@ interface Message {
 
 const STORAGE_KEY = "bolpay.voice.session";
 const MAX_MESSAGES = 30;
+// Sarvam's speech-to-text is meant for clips under about 30 seconds, so the recorder stops itself just before.
+const MAX_RECORDING_MS = 28_000;
 
 const SUGGESTIONS = [
   "Mark everyone present today",
@@ -87,9 +90,12 @@ export function VoiceAssistant() {
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const stream = useRef<MediaStream | null>(null);
+  const stopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
   const stopStream = () => {
+    if (stopTimer.current) clearTimeout(stopTimer.current);
+    stopTimer.current = null;
     stream.current?.getTracks().forEach((t) => t.stop());
     stream.current = null;
   };
@@ -161,8 +167,9 @@ export function VoiceAssistant() {
         else if (!speaker.enabled) playSound("notify");
         if (data.navigate) router.push(data.navigate);
         setThinking(false); // controls are usable while the reply is being fetched and spoken
-        const outcome = await speaker.speak(data.speech);
+        const outcome = await speaker.speak(data.speech, { language: data.language });
         if (outcome === "blocked") setNotice("Tap the speaker button to hear replies.");
+        else if (outcome === "unsupported") setNotice("Spoken replies aren't available in this language yet. The reply is shown as text.");
       } catch {
         playSound("error");
         setNotice("Could not reach the assistant. Your conversation is kept; try again.");
@@ -207,6 +214,9 @@ export function VoiceAssistant() {
     playSound("micOn");
     rec.start();
     setPhase("recording");
+    stopTimer.current = setTimeout(() => {
+      if (recorder.current?.state === "recording") stopRecording(); // the clip so far is transcribed as usual
+    }, MAX_RECORDING_MS);
   }
 
   function stopRecording() {
