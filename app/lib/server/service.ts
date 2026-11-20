@@ -15,7 +15,7 @@ import { CashfreeError, isLiveCashfree } from "@/app/lib/cashfree/rest";
 import { DEFAULT_ADVANCE_POLICY } from "@/app/lib/advance/eligibility";
 import { outstandingAdvances, planRecovery, reservedByAdvance } from "@/app/lib/advance/recovery";
 import { parseCsv } from "./csv";
-import { getDb, logAudit, saveDb, WORKSPACES } from "./db";
+import { canActOnWorker, getDb, getViewDb, listWorkspaces, logAudit, saveDb } from "./db";
 
 type DbT = ReturnType<typeof getDb>;
 
@@ -35,7 +35,8 @@ const str = (v: unknown, max = 120) => (typeof v === "string" ? v.trim().slice(0
 const num = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN);
 
 export function getSnapshot() {
-  const { workers, attendance, rules, payouts, transactions } = getDb();
+  // A supervisor's snapshot holds only their own team.
+  const { workers, attendance, rules, payouts, transactions } = getViewDb();
   return { today: getToday(), period: getPeriod(), workers, attendance, rules, payouts, transactions };
 }
 export type Snapshot = ReturnType<typeof getSnapshot>;
@@ -111,6 +112,7 @@ export function updateWorker(id: string, patch: Record<string, unknown>) {
 function applyAttendance(workerId: string, date: string, patch: Record<string, unknown>) {
   const db = getDb();
   if (!db.workers.some((w) => w.id === workerId)) throw new ServiceError("Worker not found", 404);
+  if (!canActOnWorker(workerId)) throw new ServiceError("That worker isn't on your team.", 403);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < getPeriod().start || date > getToday()) {
     throw new ServiceError("Date must be inside the current pay period and not in the future");
   }
@@ -242,7 +244,7 @@ function refreshPendingRecovery(db: DbT, workerId: string) {
  */
 function syncRecoveryFromTx(tx: Transaction) {
   if (tx.kind === "advance") return;
-  for (const ws of WORKSPACES) {
+  for (const ws of listWorkspaces()) {
     const db = getDb(ws);
     const p = db.payouts.find((x) => x.id === tx.payoutId);
     if (!p) continue;
@@ -369,6 +371,27 @@ export async function resubmitFailedTransaction(id: string) {
   const tx = db.transactions.find((t) => t.id === id);
   if (!tx) throw new ServiceError("Transaction not found", 404);
   if (tx.status !== "failed") throw new ServiceError("Only failed transactions can be retried", 409);
+
+  // A new attempt is a new transfer_id, so Cashfree can't dedupe it. Make sure the earlier attempt really
+  // didn't pay before sending another, otherwise a lost response would turn into a double payment.
+  if (tx.transferId) {
+    let prior: Awaited<ReturnType<typeof getTransfer>> | null = null;
+    try {
+      prior = await getTransfer(tx.transferId);
+    } catch (err) {
+      if (!(err instanceof CashfreeError && err.status === 404)) {
+        throw new ServiceError("Couldn't confirm the earlier attempt with Cashfree, so nothing was sent again. Try again in a moment.", 502);
+      }
+    }
+    if (tx.status !== "failed") return; // another retry got here first while we were asking Cashfree
+    if (prior && prior.status !== "failed") {
+      // The earlier attempt actually went through (or is still running): adopt its real state instead of paying again.
+      applyTransferResult(tx, prior.status, { cfTransferId: prior.cfTransferId, utr: prior.utr, error: prior.error });
+      logAudit("payout.retry_blocked", `${tx.id}: earlier attempt is ${prior.status} at Cashfree`);
+      saveDb();
+      return;
+    }
+  }
   tx.status = "processing";
   tx.failureReason = undefined;
   tx.cfTransferId = undefined;
@@ -382,8 +405,33 @@ export async function resubmitFailedTransaction(id: string) {
 function fail(tx: Transaction, reason: string) {
   tx.status = "failed";
   tx.failureReason = reason;
-  if (tx.reference === "Submitting…") tx.reference = "—";
+  tx.uncertainSince = undefined;
+  if (tx.reference === "Submitting…" || tx.reference === CHECKING) tx.reference = "—";
   syncAdvanceFromTx(tx);
+}
+
+const CHECKING = "Checking with Cashfree…";
+/** How long a lost transfer response may stay "unknown" before a missing record counts as "never created". */
+const UNCERTAIN_GRACE_MS = 2 * 60_000;
+
+/**
+ * True when we can't tell whether Cashfree took the transfer: the connection dropped, it timed out, or Cashfree
+ * answered 5xx. A 4xx is a clear refusal. Money may have moved in the unclear case, so it must never be marked failed.
+ */
+function outcomeUnknown(err: unknown) {
+  return !(err instanceof CashfreeError) || err.status >= 500 || err.status === 408;
+}
+
+/** The transfer request got no clear answer: ask Cashfree what it knows, otherwise keep it processing for sync to settle. */
+async function settleUnknown(tx: Transaction) {
+  try {
+    const r = await getTransfer(tx.transferId!);
+    applyTransferResult(tx, r.status, { cfTransferId: r.cfTransferId, utr: r.utr, error: r.error });
+  } catch {
+    tx.status = "processing";
+    tx.uncertainSince ??= new Date().toISOString();
+    tx.reference = CHECKING;
+  }
 }
 
 /**
@@ -393,7 +441,7 @@ function fail(tx: Transaction, reason: string) {
  */
 function syncAdvanceFromTx(tx: Transaction) {
   if (tx.kind !== "advance" || !tx.advanceId) return;
-  for (const ws of WORKSPACES) {
+  for (const ws of listWorkspaces()) {
     const a = getDb(ws).advances?.find((x) => x.id === tx.advanceId);
     if (!a) continue;
     if (!["paying", "payment_failed", "paid"].includes(a.status)) return;
@@ -443,6 +491,10 @@ export async function submitToCashfree(txIds: string[]) {
           applyTransferResult(tx, r.status, { cfTransferId: r.cfTransferId, utr: r.utr, error: r.error });
         } catch (err) {
           console.error("Cashfree transfer failed", err);
+          if (outcomeUnknown(err)) {
+            await settleUnknown(tx);
+            return;
+          }
           const detail = err instanceof CashfreeError ? err.message : "Unexpected error";
           fail(tx, `Cashfree rejected the transfer: ${detail}`);
         }
@@ -476,7 +528,12 @@ export async function syncTransactions() {
           const r = await getTransfer(tx.transferId!);
           applyTransferResult(tx, r.status, { cfTransferId: r.cfTransferId, utr: r.utr, error: r.error });
         } catch (err) {
-          console.error(`Could not sync Cashfree transfer ${tx.transferId}`, err);
+          // After the grace period, "Cashfree has no such transfer" means the lost request never arrived: now it is safe to retry.
+          if (tx.uncertainSince && err instanceof CashfreeError && err.status === 404 && Date.now() - Date.parse(tx.uncertainSince) > UNCERTAIN_GRACE_MS) {
+            fail(tx, "Cashfree has no record of this transfer, so no money was sent. It is safe to retry.");
+          } else {
+            console.error(`Could not sync Cashfree transfer ${tx.transferId}`, err);
+          }
         }
       }),
     );
@@ -488,6 +545,8 @@ function applyTransferResult(tx: Transaction, status: Transaction["status"], inf
   if (info.cfTransferId) tx.cfTransferId = info.cfTransferId;
   const ref = info.utr || info.cfTransferId;
   if (ref) tx.reference = ref;
+  else if (tx.reference === CHECKING) tx.reference = "Submitting…";
+  tx.uncertainSince = undefined;
   tx.status = status;
   tx.failureReason = status === "failed" ? (info.error ?? "Payment failed") : undefined;
   syncAdvanceFromTx(tx);
@@ -500,14 +559,95 @@ function applyTransferResult(tx: Transaction, status: Transaction["status"], inf
  * Transfer ids derive from the payout id (which includes the period id), so a match is unambiguous.
  */
 export function applyWebhookTransfer(item: { transferId: string; status: Transaction["status"]; cfTransferId?: string; utr?: string; error?: string }) {
-  for (const ws of WORKSPACES) {
+  for (const ws of listWorkspaces()) {
     const tx = getDb(ws).transactions.find((t) => t.transferId === item.transferId);
     if (!tx) continue;
+    // A "not settled yet" event never pulls a finished payment backwards (late, out-of-order or replayed delivery).
+    // Completed to failed is still allowed: that is how a reversal arrives.
+    if (item.status === "processing" && tx.status !== "processing") return true;
     applyTransferResult(tx, item.status, item);
     saveDb(ws);
     return true;
   }
   return false;
+}
+
+/* ------------------------------- teams ------------------------------- */
+
+/** Active workers who aren't on any supervisor's team yet: the pool a new supervisor picks from. */
+export function unassignedWorkers(): { id: string; name: string; role: string; city: string }[] {
+  return getDb()
+    .workers.filter((w) => w.status === "active" && !w.supervisorId)
+    .map((w) => ({ id: w.id, name: w.name, role: w.role, city: w.city }));
+}
+
+/** A supervisor takes workers who have no supervisor yet. Never takes a worker from someone else's team. */
+export function claimWorkers(supervisorId: string, ids: string[]): number {
+  let n = 0;
+  for (const w of getDb().workers) {
+    if (ids.includes(w.id) && w.status === "active" && !w.supervisorId) {
+      w.supervisorId = supervisorId;
+      n++;
+    }
+  }
+  if (n) {
+    logAudit("team.claim", `${n} worker${n === 1 ? "" : "s"} joined a supervisor's team`);
+    saveDb();
+  }
+  return n;
+}
+
+/** Owner: put workers on a supervisor's team (or `null` to take them off any team). */
+export function assignSupervisor(ids: string[], supervisorId: string | null): number {
+  let n = 0;
+  for (const w of getDb().workers) {
+    if (ids.includes(w.id) && w.supervisorId !== (supervisorId ?? undefined)) {
+      w.supervisorId = supervisorId ?? undefined;
+      n++;
+    }
+  }
+  if (n) {
+    logAudit("team.assign", `${n} worker${n === 1 ? "" : "s"} ${supervisorId ? "assigned to a supervisor" : "taken off their team"}`);
+    saveDb();
+  }
+  return n;
+}
+
+/**
+ * A worker finishing their own sign-up may give the UPI id their pay goes to, but only while none is on
+ * file. Changing an existing id stays an owner action, so a stolen login can't redirect someone's pay.
+ */
+export function setOwnUpiOnce(workerId: string, upi: string) {
+  const w = getDb().workers.find((x) => x.id === workerId);
+  if (!w) throw new ServiceError("Worker not found", 404);
+  const v = str(upi).toLowerCase();
+  if (!UPI_ID.test(v)) throw new ServiceError("UPI ID is not valid (expected name@bank)");
+  if (w.payoutUpi) throw new ServiceError("A UPI ID is already on file. Ask your employer to change it.", 409);
+  w.payoutUpi = v;
+  logAudit("worker.upi_set", `${w.name} added a UPI ID`);
+  saveDb();
+}
+
+/* --------------------------- business setup --------------------------- */
+
+export interface BusinessSetup {
+  payCycle: "weekly" | "fortnightly" | "monthly";
+  defaultWage: number;
+  /** "standard" keeps overtime and bonuses; "simple" pays the flat daily wage only. */
+  preset: "standard" | "simple";
+}
+
+/** Saves what the owner chose in onboarding: pay cycle, the wage given to imported staff, and the rules preset. */
+export function applyBusinessSetup(input: BusinessSetup) {
+  if (!["weekly", "fortnightly", "monthly"].includes(input.payCycle)) throw new ServiceError("Choose weekly, fortnightly or monthly");
+  if (!Number.isFinite(input.defaultWage) || input.defaultWage <= 0 || input.defaultWage > 100_000) throw new ServiceError("Daily wage must be a positive number");
+  const db = getDb();
+  db.settings = { ...db.settings, payCycle: input.payCycle, defaultWage: Math.round(input.defaultWage) };
+  if (input.preset === "simple") {
+    setRules({ ...db.rules, overtimeMultiplier: 1, attendanceBonus: 0, ratePerExtraUnit: 0, dailyUnitTarget: 0, deliveryTiers: [] });
+  }
+  logAudit("business.setup", `${input.payCycle} pay, ${input.preset} rules`);
+  saveDb();
 }
 
 /* ------------------------------ CSV import ------------------------------ */

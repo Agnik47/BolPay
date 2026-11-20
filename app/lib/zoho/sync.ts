@@ -1,11 +1,10 @@
 import "server-only";
 import type { Worker } from "@/app/lib/merchant/types";
 import { getPeriod, getToday } from "@/app/lib/server/context";
-import { getDb, logAudit, saveDb } from "@/app/lib/server/db";
+import { getDb, logAudit, saveDb, zohoTarget } from "@/app/lib/server/db";
 import { fetchAttendance, fetchEmployeeRows, writeZoho, zohoConfig, ZohoError, type SyncSummary } from "./client";
 import { mapEmployee, type MappedEmployee } from "./mapper";
 
-const WS = "zoho" as const;
 const idFor = (employeeId: string) => `z-${employeeId.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
 /**
@@ -20,6 +19,7 @@ const idFor = (employeeId: string) => `z-${employeeId.toLowerCase().replace(/[^a
  */
 export async function syncZoho(): Promise<SyncSummary> {
   const cfg = zohoConfig();
+  const WS = zohoTarget();
   const today = getToday(WS);
   const period = getPeriod(WS);
   const warnings: string[] = [];
@@ -31,6 +31,8 @@ export async function syncZoho(): Promise<SyncSummary> {
   if (employees.length === 0) throw new ZohoError("Zoho returned no employee records. Check that the connected user can view the Employee form.", 502);
 
   const db = getDb(WS);
+  // The owner's own default (set in onboarding) wins over the .env placeholder.
+  const defaultWage = db.settings?.defaultWage ?? cfg.defaultWage;
   let created = 0;
   let updated = 0;
   for (const e of employees) {
@@ -40,7 +42,7 @@ export async function syncZoho(): Promise<SyncSummary> {
       Object.assign(existing, common);
       updated++;
     } else {
-      const w: Worker = { id: idFor(e.employeeId), payoutUpi: "", dailyWage: e.wage ?? cfg.defaultWage, externalId: e.externalId, source: "zoho", ...common };
+      const w: Worker = { id: idFor(e.employeeId), payoutUpi: "", dailyWage: e.wage ?? defaultWage, externalId: e.externalId, source: "zoho", ...common };
       db.workers.push(w);
       created++;
     }

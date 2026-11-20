@@ -12,7 +12,9 @@ interface Status {
   connection: "oauth" | "env" | null;
   connectedAt: string | null;
   lastSync: SyncSummary | null;
-  workspace: "demo" | "zoho";
+  workspace: string;
+  /** True when Zoho employees go straight into this business's only dataset (no separate Zoho dataset to open). */
+  dedicated: boolean;
   workers: number;
   attendance: number;
   upi: { active: number; withUpi: number; withoutUpi: number };
@@ -117,7 +119,7 @@ export function ZohoView() {
         title="Integrations"
         description="Bring employees and attendance from your HR system, then run payouts in BolPay. The demo data stays separate."
         actions={
-          status?.workers ? (
+          status?.workers && !status.dedicated ? (
             <Button variant="primary" disabled={busy !== null || status.workspace === "zoho"} onClick={() => void openZohoData()}>
               {status.workspace === "zoho" ? "Viewing Zoho data" : "Open Zoho data"}
             </Button>

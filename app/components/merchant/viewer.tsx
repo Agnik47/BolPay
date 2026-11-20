@@ -10,6 +10,8 @@ export interface Viewer {
   businessName: string;
   /** True when CASHFREE_ENVIRONMENT=production (read on the server). */
   liveCashfree: boolean;
+  /** True for a business that signed up itself (not the seeded demo): it gets the "Finish setup" checklist. */
+  ownBusiness?: boolean;
 }
 
 /**

@@ -18,6 +18,8 @@ export interface Worker {
   source?: "zoho";
   /** Department from the HR system (informational). */
   department?: string;
+  /** Supabase user id of the supervisor whose team this worker is on. Unset = not on anyone's team yet. */
+  supervisorId?: string;
 }
 
 export type AttendanceStatus = "present" | "half" | "absent" | "leave";
@@ -128,6 +130,11 @@ export interface Transaction {
   kind?: "payroll" | "advance";
   /** For kind "advance": the request this transfer pays. */
   advanceId?: string;
+  /**
+   * Set when Cashfree's answer to the transfer request was lost (timeout, 5xx), so the money may or may not have
+   * moved. The payment stays "processing" and sync decides; it is never retried automatically.
+   */
+  uncertainSince?: string; // ISO
 }
 
 /* ----------------------------- BolPay Advance (docs/ADVANCE.md) ----------------------------- */

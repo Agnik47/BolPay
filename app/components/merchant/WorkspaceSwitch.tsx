@@ -17,8 +17,9 @@ export function WorkspaceSwitch() {
     let cancelled = false;
     void fetch("/api/workspace")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { workspace?: Workspace } | null) => {
-        if (!cancelled && d?.workspace) setWorkspace(d.workspace);
+      .then((d: { workspace?: string } | null) => {
+        // Only the demo business has two datasets; a business that signed up itself has just its own.
+        if (!cancelled && (d?.workspace === "demo" || d?.workspace === "zoho")) setWorkspace(d.workspace);
       })
       .catch(() => {});
     return () => {

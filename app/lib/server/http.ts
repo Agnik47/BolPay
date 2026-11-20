@@ -2,7 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { connection, NextResponse } from "next/server";
 import { getSession, type Role, type SessionContext } from "@/app/lib/auth/dal";
-import { parseWorkspace, runInWorkspace, WORKSPACE_COOKIE, type Workspace } from "./db";
+import { parseWorkspace, runAsViewer, runInWorkspace, workspaceForBusiness, WORKSPACE_COOKIE, type Workspace } from "./db";
 import { getSnapshot, ServiceError } from "./service";
 
 /** Owners and supervisors run the business; workers only see their own pay page. */
@@ -64,24 +64,37 @@ export async function respond(
   });
 }
 
-/** The dataset this caller chose (their own cookie), defaulting to the demo data. */
+/**
+ * The dataset this caller works on. Their business decides first: the demo business uses the dataset its
+ * people chose (cookie, demo or zoho), any other business gets its own file and the cookie is ignored.
+ * Signed-out callers get the cookie's choice, and are turned away before any data is read.
+ */
 export async function requestWorkspace(): Promise<Workspace> {
-  return parseWorkspace((await cookies()).get(WORKSPACE_COOKIE)?.value);
+  const chosen = parseWorkspace((await cookies()).get(WORKSPACE_COOKIE)?.value);
+  const session = await getSession();
+  return session ? workspaceForBusiness(session.business.id, chosen) : chosen;
 }
 
-/** Runs a route's work against the caller's own dataset. Routes that use respond() get this automatically. */
+/**
+ * Runs a route's work against the caller's own dataset, and (for a supervisor) limited to their own team.
+ * Routes that use respond() get this automatically.
+ */
 export async function withRequestWorkspace<T>(fn: () => Promise<T>): Promise<T> {
-  return runInWorkspace(await requestWorkspace(), fn);
+  const ws = await requestWorkspace();
+  const session = await getSession();
+  return runInWorkspace(ws, () => runAsViewer(session?.role === "supervisor" ? session.userId : undefined, fn));
 }
 
 /**
  * Like respond(), for worker-facing routes: the caller must be a signed-in worker linked to a worker profile,
- * the response is only what `fn` returns (never the company snapshot), and the demo dataset is used because
- * worker sessions don't carry a dataset yet. `fn` receives the worker id from the verified session.
+ * the response is only what `fn` returns (never the company snapshot), and it runs in the worker's own business's
+ * dataset (the demo business's workers use the demo data, since worker sessions don't carry a dataset choice).
+ * `fn` receives the worker id from the verified session.
  */
 export async function respondWorker(fn: (ctx: { workerId: string; userId: string }) => Promise<unknown> | unknown) {
   await connection();
-  return runInWorkspace("demo", async () => {
+  const session = await getSession();
+  return runInWorkspace(session ? workspaceForBusiness(session.business.id, "demo") : "demo", async () => {
     try {
       const session = await requireApiRole(["worker"]);
       if (!session.workerRef) throw new ServiceError("Your login isn't linked to a worker profile yet.", 403);

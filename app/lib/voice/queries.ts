@@ -2,17 +2,24 @@ import "server-only";
 import { formatDate, formatMoney } from "@/app/lib/merchant/format";
 import { calculatePay } from "@/app/lib/merchant/incentives";
 import { getPeriod, getToday } from "@/app/lib/server/context";
-import { getDb } from "@/app/lib/server/db";
+import { getViewDb } from "@/app/lib/server/db";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const some = (names: string[], max = 6) => (names.length <= max ? names.join(", ") : `${names.slice(0, max).join(", ")} and ${names.length - max} more`);
+
+/** What the assistant says when asked what it can do. Kept short because it is read aloud; the screen has a fuller Help view. */
+export const HELP_ANSWER =
+  "I can mark attendance, record overtime and deliveries, calculate and approve payouts, retry failed payments, add or edit workers, change pay rules, open screens, and answer questions about attendance and payments. Anything that moves money asks you to confirm first. You can speak in any language and chain steps in one sentence. Tap Help for examples.";
+
+export const HELP_ANSWER_SUPERVISOR =
+  "I can mark attendance, record overtime and deliveries, calculate pay for your team, open screens, and answer questions about attendance. Approving payouts, editing workers and changing pay rules are for the owner. You can speak in any language and chain steps in one sentence. Tap Help for examples.";
 
 /**
  * Read-only answers computed from stored records. Everything here is deterministic: the model only
  * picks which question is being asked.
  */
-export function answerQuery(kind: string, o: { workerIds: string[] | null; date: string; n: number | null }): string {
-  const db = getDb();
+export function answerQuery(kind: string, o: { workerIds: string[] | null; date: string; n: number | null; role?: "owner" | "supervisor" }): string {
+  const db = getViewDb();
   const nameOf = (id: string) => db.workers.find((w) => w.id === id)?.name ?? "Unknown";
   const txs = db.transactions.filter((t) => t.kind !== "advance" && t.periodLabel === getPeriod().label);
   const payouts = db.payouts.filter((p) => p.periodId === getPeriod().id);
@@ -89,6 +96,8 @@ export function answerQuery(kind: string, o: { workerIds: string[] | null; date:
       const tiers = r.deliveryTiers.map((t) => `${t.minUnits}+ deliveries ₹${t.bonus}`).join(", ") || "none";
       return `Rules v${r.version}: daily tiers ${tiers}; overtime ${r.overtimeMultiplier} times hourly; attendance bonus ₹${r.attendanceBonus} at ${Math.round(r.attendanceThreshold * 100)} percent; ₹${r.ratePerExtraUnit} per delivery above ${r.dailyUnitTarget} a day.`;
     }
+    case "help":
+      return o.role === "supervisor" ? HELP_ANSWER_SUPERVISOR : HELP_ANSWER;
     default:
       return "I can't answer that yet.";
   }

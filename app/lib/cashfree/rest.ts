@@ -67,6 +67,8 @@ export async function cashfreeFetch<T>(path: string, init: { method?: "GET" | "P
     },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
     cache: "no-store",
+    // A request that hangs would freeze the approval; a timeout is treated as "outcome unknown", never as a failure.
+    signal: AbortSignal.timeout(30_000),
   });
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {

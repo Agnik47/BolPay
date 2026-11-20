@@ -1,6 +1,7 @@
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
+import { getWorkspace } from "@/app/lib/server/db";
 import { flattenEmployeeRecords, mapAttendanceReport, type MappedAttendance } from "./mapper";
 
 /**
@@ -62,24 +63,38 @@ interface Stored {
 
 const FILE = path.join(process.env.DATA_DIR || path.join(process.cwd(), ".data"), "integrations.json");
 
-function readAll(): { zoho?: Stored } {
+/**
+ * Each business has its own Zoho connection: the demo business keeps the original "zoho" slot, every
+ * other business is stored under its own workspace key (b_<id>), so one business can never sync from
+ * (or disconnect) another's Zoho organisation.
+ */
+export function tokenKey(): string {
+  const ws = getWorkspace();
+  return ws.startsWith("b_") ? ws : "zoho";
+}
+
+function readAll(): Record<string, Stored | undefined> {
   try {
-    return JSON.parse(fs.readFileSync(FILE, "utf8")) as { zoho?: Stored };
+    return JSON.parse(fs.readFileSync(FILE, "utf8")) as Record<string, Stored | undefined>;
   } catch {
     return {};
   }
 }
 
 export function readZoho(): Stored {
-  return readAll().zoho ?? {};
+  return readAll()[tokenKey()] ?? {};
 }
 
 export function writeZoho(patch: Partial<Stored> | null) {
   const all = readAll();
-  all.zoho = patch === null ? undefined : { ...(all.zoho ?? {}), ...patch };
+  const key = tokenKey();
+  all[key] = patch === null ? undefined : { ...(all[key] ?? {}), ...patch };
   fs.mkdirSync(path.dirname(FILE), { recursive: true });
   fs.writeFileSync(FILE, JSON.stringify(all));
 }
+
+/** The shared ZOHO_REFRESH_TOKEN from .env belongs to the demo business only. */
+const envRefreshFor = () => (tokenKey() === "zoho" ? zohoConfig().envRefreshToken : "");
 
 /* --------------------------------------- OAuth --------------------------------------- */
 
@@ -111,13 +126,13 @@ export async function exchangeCode(code: string) {
 
 export function connection(): "oauth" | "env" | null {
   if (readZoho().refreshToken) return "oauth";
-  return zohoConfig().envRefreshToken ? "env" : null;
+  return envRefreshFor() ? "env" : null;
 }
 
 async function accessToken(force = false): Promise<string> {
   const stored = readZoho();
   if (!force && stored.accessToken && (stored.expiresAt ?? 0) > Date.now() + 60_000) return stored.accessToken;
-  const refresh = stored.refreshToken || zohoConfig().envRefreshToken;
+  const refresh = stored.refreshToken || envRefreshFor();
   if (!refresh) throw new ZohoError("Zoho is not connected. Use Connect Zoho first.", 400);
   const j = await tokenRequest({ grant_type: "refresh_token", refresh_token: refresh });
   writeZoho({ accessToken: j.access_token, expiresAt: Date.now() + (j.expires_in ?? 3600) * 1000 });

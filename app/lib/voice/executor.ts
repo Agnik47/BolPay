@@ -81,7 +81,7 @@ export function describePreview(p: MoneyPreview): string {
 
 const failMessage = (e: unknown) => (e instanceof ServiceError ? e.message : "Something went wrong");
 
-async function runStep(step: ResolvedStep, dryRun: boolean): Promise<StepOutcome & { navigate?: string }> {
+async function runStep(step: ResolvedStep, dryRun: boolean, role: VoiceRole = "owner"): Promise<StepOutcome & { navigate?: string }> {
   const db = getDb();
   const a = step.args;
   const date = (a.date as string | null) ?? getToday();
@@ -218,7 +218,7 @@ async function runStep(step: ResolvedStep, dryRun: boolean): Promise<StepOutcome
     }
 
     case "query":
-      return { ok: true, message: answerQuery(a.query as string, { workerIds: a.workers ? ids : null, date, n: (a.n as number | null) ?? null }) };
+      return { ok: true, message: answerQuery(a.query as string, { workerIds: a.workers ? ids : null, date, n: (a.n as number | null) ?? null, role }) };
 
     case "navigate": {
       const path = PAGE_PATH[a.page as string];
@@ -264,7 +264,7 @@ export async function runPlan(steps: ResolvedStep[], cursor: number, dryRun: boo
       }
       if (live && (!step.expect || !samePreview(step.expect, live))) return { outcomes, cursor: i, checkpoint: { stepIndex: i, preview: live }, navigate };
     }
-    const out = await runStep(step, dryRun);
+    const out = await runStep(step, dryRun, role);
     outcomes[i] = { ok: out.ok, skipped: out.skipped, message: out.message };
     if (out.navigate) navigate = out.navigate;
     if (!out.ok) return { outcomes, cursor: i + 1, navigate };

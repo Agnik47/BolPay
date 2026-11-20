@@ -9,7 +9,7 @@ import { translateToEnglish } from "@/app/lib/sarvam/client";
 import { translateReply } from "@/app/lib/ai/translate";
 import type { AdvanceEligibility, AdvancePolicy, AdvanceReason, AdvanceRequest, Transaction } from "@/app/lib/merchant/types";
 import { getPeriod, getToday } from "./context";
-import { getDb, logAudit, saveDb } from "./db";
+import { canActOnWorker, getDb, logAudit, saveDb } from "./db";
 import { refreshTransaction, resubmitFailedTransaction, ServiceError, submitToCashfree } from "./service";
 
 const REASONS: AdvanceReason[] = ["vehicle_repair", "medical", "family_event", "housing", "education", "other"];
@@ -231,7 +231,8 @@ const note = (v: unknown, max = 200) => (typeof v === "string" ? v.replace(/[\u0
 export function staffAdvances() {
   expireStale();
   const db = getDb();
-  return [...advances()]
+  // A supervisor only sees requests from workers on their own team (the owner sees everyone's).
+  return advances().filter((a) => canActOnWorker(a.workerId))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map((a) => {
       const w = db.workers.find((x) => x.id === a.workerId);
@@ -254,6 +255,7 @@ export function staffAdvances() {
 export function recommendAdvance(id: string, actor: Actor, verdict: unknown, text: unknown) {
   expireStale();
   const a = findAdvance(id);
+  if (!canActOnWorker(a.workerId)) throw new ServiceError("Request not found.", 404);
   if (a.status !== "pending_review") throw new ServiceError("This request is no longer waiting for review.", 409);
   if (verdict !== "approve" && verdict !== "reject") throw new ServiceError("Choose approve or reject.");
   a.recommendation = { by: actor.id, byName: actor.name, at: new Date().toISOString(), verdict, note: note(text) };
