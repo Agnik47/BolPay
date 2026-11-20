@@ -47,3 +47,4 @@ next-env.d.ts
 
 # demo video audio (generated, large)
 /demo-assets
+.claude/skills/

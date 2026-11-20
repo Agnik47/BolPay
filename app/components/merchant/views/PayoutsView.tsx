@@ -65,7 +65,7 @@ export function PayoutsView() {
 
       <Stats className="mb-5">
         <Stat label="Pending" value={String(pending.length)} hint={review.length ? `${review.length} need review` : "Ready to decide"} tone={review.length ? "warn" : "default"} />
-        <Stat label="Pending amount" value={formatMoney(pending.reduce((s, p) => s + p.amount, 0))} hint="Sent in USD at approval" />
+        <Stat label="Pending amount" value={formatMoney(pending.reduce((s, p) => s + p.amount, 0))} hint="Sent in INR by UPI at approval" />
         <Stat label="Selected" value={formatMoney(chosenTotal)} hint={`${chosen.length} payout${chosen.length === 1 ? "" : "s"}`} />
       </Stats>
 

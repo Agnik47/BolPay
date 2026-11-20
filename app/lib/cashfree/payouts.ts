@@ -46,6 +46,7 @@ export function mapTransferStatus(status: string | undefined): ItemStatus {
     case "REJECTED":
     case "REVERSED":
     case "CANCELLED":
+    case "MANUALLY_REJECTED":
       return "failed";
     // RECEIVED, SENT_TO_BENEFICIARY, PENDING, APPROVAL_PENDING...: not settled yet.
     default:
@@ -55,11 +56,20 @@ export function mapTransferStatus(status: string | undefined): ItemStatus {
 
 const digits = (s: string) => s.replace(/\D/g, "");
 
+/** Beneficiary states that can never receive a transfer. INITIATED (still verifying) is let through. */
+const BAD_BENEFICIARY_STATUS = new Set(["INVALID", "FAILED", "DELETED"]);
+
+function assertBeneficiaryUsable(upi: string, status: string | undefined) {
+  if (status && BAD_BENEFICIARY_STATUS.has(status)) {
+    throw new CashfreeError(`UPI id ${upi} could not be verified by Cashfree (${status.toLowerCase()})`, 422);
+  }
+}
+
 async function ensureBeneficiary(t: TransferInput): Promise<string> {
   const id = beneficiaryIdFor(t.workerId, t.upi);
   const phone = digits(t.phone).slice(-10);
   try {
-    await cashfreeFetch("/beneficiary", {
+    const created = await cashfreeFetch<{ beneficiary_status?: string }>("/beneficiary", {
       method: "POST",
       body: {
         beneficiary_id: id,
@@ -68,10 +78,13 @@ async function ensureBeneficiary(t: TransferInput): Promise<string> {
         ...(phone.length === 10 ? { beneficiary_contact_details: { beneficiary_phone: phone, beneficiary_country_code: "+91" } } : {}),
       },
     });
+    assertBeneficiaryUsable(t.upi, created.beneficiary_status);
   } catch (err) {
-    // Already registered on an earlier attempt: reuse it.
+    // Already registered on an earlier attempt: reuse it, but still make sure it is usable.
     const exists = err instanceof CashfreeError && (err.status === 409 || /already exist/i.test(err.message));
     if (!exists) throw err;
+    const current = await cashfreeFetch<{ beneficiary_status?: string }>(`/beneficiary?beneficiary_id=${encodeURIComponent(id)}`);
+    assertBeneficiaryUsable(t.upi, current.beneficiary_status);
   }
   return id;
 }
