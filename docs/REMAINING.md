@@ -34,7 +34,7 @@ Size: **S** under 1 hour, **M** a few hours, **L** a day or more. Owners follow 
 | 5.4 | AI intent processing, validation, no LLM money | **Done**, 40 of 40 eval fixtures | V-11, V-12 |
 | 5.5 | Incentive engine (tiers, versions, Needs Review, ₹) | Done with simplifications | D-01 to D-06 |
 | 5.6 | Payout batch and approval | Done; batch-level view missing | U-02, D-03 |
-| 5.7 | Cashfree payouts, statuses, webhooks, reconciliation | Implemented; **not yet run on the Cashfree sandbox; webhooks and reconciliation not** | P-01 to P-11 |
+| 5.7 | Cashfree payouts, statuses, webhooks, reconciliation | Payouts **verified on the Cashfree sandbox** (approve, send, sync, completed, retry); **webhooks, Cashfree-side failures and reconciliation not yet** | P-01 (webhook half) to P-11 |
 | 5.8 | Voice payout status updates | **Done** | V-06 |
 | 6 | End-to-end flow | Works locally, not yet rehearsed from a clean clone | S-06, G-02 |
 | 8 | Architecture (Express + Postgres + Prisma) | **Differs**: Next.js route handlers + JSON file | B-01 |
@@ -91,7 +91,7 @@ Size: **S** under 1 hour, **M** a few hours, **L** a day or more. Owners follow 
 ### P. Payments and Cashfree
 | ID | Pri | Size | Owner | Task and acceptance |
 |---|---|---|---|---|
-| P-01 | P0 | M | Payments | **Sandbox end to end first:** add the Payouts test keys and test funds, approve a payout to `success@upi`, and confirm it reaches `completed` via sync. **Then webhooks:** public HTTPS URL (ngrok or Render), register `/api/webhooks/cashfree` in the dashboard, send a payout, and observe `TRANSFER_SUCCESS` update the transaction without clicking sync. |
+| P-01 | P0 | M | Payments | **Sandbox end to end: DONE 2026-11-20** (payout to `success@upi` approved in the app reached `completed` with a UTR via sync). **Webhooks still open:** public HTTPS URL (ngrok or Render), register `/api/webhooks/cashfree` in the dashboard, send a payout, and observe `TRANSFER_SUCCESS` update the transaction without clicking sync. |
 | P-02 | P0 | S | Payments | **Invalid-signature test:** a forged POST to `/api/webhooks/cashfree` returns 400 and changes nothing. |
 | P-03 | P0 | S | Payments | **Failure and pending scenarios:** use `failure@upi` and the `testinsufficientfunds@gocash` / `testtimeoutbank@gocash` style test VPAs from Cashfree's docs, and an empty-balance run. Confirm the statuses and messages shown (failed, pending, successful). |
 | P-04 | P1 | M | Backend | **Reconciliation:** a screen or action comparing internal transactions with Cashfree transfers (and settlement reports); flag mismatches (status, amount, missing transfer). |
@@ -177,7 +177,7 @@ Size: **S** under 1 hour, **M** a few hours, **L** a day or more. Owners follow 
 | G-03 | P1 | S | Integration | Architecture diagram image in the README (voice turn flow from [VOICE.md](./VOICE.md), payout flow). |
 | G-04 | P1 | S | Integration | Fill the gaps in the PRD (see §15 of [PRD.md](./PRD.md): extended requirements). |
 | G-05 | P2 | S | Backend | API reference generated from the OpenAPI spec (S-11). |
-| G-06 | P2 | S | Integration | A short "What we learned / limits" section for the write-up (rate limits, UPI limits, sandbox test funds and whitelisting). |
+| G-06 | P2 | S | Integration | A short "What we learned / limits" section for the write-up (rate limits, UPI limits, sandbox test funds and whitelisting). Material is in [BUILT.md](./BUILT.md) section 13 ("Setup lessons"): separate Payouts keys, no-KYC test environment, the IP whitelist vs signature identity check, and the sandbox service fee. |
 
 ### Z. Zoho HRMS integration (new)
 | ID | Pri | Size | Owner | Task and acceptance |
@@ -222,7 +222,7 @@ Size: **S** under 1 hour, **M** a few hours, **L** a day or more. Owners follow 
 | JSON database | Not for hosted or multi-user use | B-01 decision |
 | No auth | Anyone reaching the app can approve payouts | A-01, A-02 before any public URL |
 | Browser microphone untested | Demo-day surprise | V-01 early, on the demo machine |
-| Cashfree payouts and webhooks untested | The live payment path is unproven | P-01, P-02 |
+| Cashfree webhooks and Cashfree-side failures untested | Payouts are proven on the sandbox (2026-11-20), but a status pushed by webhook and a rejection from Cashfree itself are not | P-01 (webhook half), P-02, P-03 |
 | Repo is a teammate's, history predates the hackathon | the submission asks what changed since 1 Oct | S-05 |
 | Turbopack stale modules in dev | Confusing errors after edits | Restart the dev server after server-side edits; use a production build for the video |
 

@@ -7,8 +7,8 @@ Updated 2026-11-20 (payments moved from PayPal to Cashfree; speech moved to Sarv
 | Area | State |
 |---|---|
 | Merchant dashboard (workers, attendance, incentives, approvals, transactions) | Working |
-| Cashfree Payouts (UPI transfers, beneficiaries, sync, retry, idempotent ids) | Implemented and type-checked; **not yet run against the Cashfree sandbox** (needs the Payouts keys and test funds) |
-| Cashfree webhooks with signature verification | Implemented (signature scheme checked against Cashfree's docs), **not yet tested** (needs a public URL) |
+| Cashfree Payouts (UPI transfers, beneficiaries, sync, retry, idempotent ids) | **Verified on the Cashfree sandbox (2026-11-20):** approve, send, sync and `completed` with a UTR, through the app. Failure paths other than a rejected request and a missing UPI ID are not yet exercised (see section 2) |
+| Cashfree webhooks with signature verification | Implemented (signature scheme matches Cashfree's Payouts docs), **not yet tested** (needs a public URL). Polling already updates statuses without it |
 | Rules engine (wage, overtime, per-unit, daily tiers, attendance bonus, versions) | Working |
 | Needs Review (missing or conflicting records) | Working |
 | Voice assistant (multi-step, follow-ups, spoken confirm, exact-amount checkpoint) | Working, 40 of 40 fixtures; browser microphone untested |
@@ -24,7 +24,12 @@ Updated 2026-11-20 (payments moved from PayPal to Cashfree; speech moved to Sarv
 | Database | JSON file (not Postgres) |
 
 ## 2. Verified against real services (sandbox)
-- **Cashfree Payouts:** *not yet verified.* The earlier PayPal run no longer applies. To verify: add the Payouts test keys and balance, then run submit period → approve → sync → `completed`, a worker with no UPI ID failing with a clear reason, `failure@upi` failing at Cashfree, retry creating attempt 2, and Needs Review payouts being refused at approval (the last is server logic and independent of the payment provider).
+- **Cashfree Payouts (verified 2026-11-20, Payouts test environment, no KYC needed):**
+  - Direct API: add a beneficiary (`success@upi`, status `VERIFIED`), create a ₹1 UPI transfer (`RECEIVED`), and a status check a few seconds later returned `SUCCESS` with a UTR.
+  - Through the app: submit period (21 payouts sent for approval, 3 held as Needs Review), approve 2 payouts, then **Processing → Completed** with UTRs and a toast, and "Paid out" rose by the amount.
+  - Failure handling seen for real: Cashfree rejecting the request ("IP not whitelisted") shows as **Failed** with the reason and a Retry button; Retry sends a new attempt that completed once the signature method was on. A worker with no UPI ID fails with "Worker has no UPI ID on file".
+  - The sandbox charged a service fee on the ₹1 transfer (₹6 plus ₹1.08 tax). BolPay does not show fees.
+  - **Not yet exercised:** `failure@upi` and other Cashfree-side failures, an empty-balance run, retry after a Cashfree-side failure, and webhooks.
 - **Voice assistant eval:** `npm run test:voice` passes **40 of 40** dry-run conversation fixtures: multi-step flows, clarification then answer, an unrelated command superseding a question, spoken confirm in English, Hindi and Hinglish, cancel, a confirm-looking command that must not confirm, plan edits, ambiguous and unknown names, out-of-period dates, rule edits, prompt-injection attempts. Metrics for that run: 0 errors, model latency p50 about 0.7 s and p95 about 10 s (that tail is rate-limit failover), clarification rate 13 percent. About 40 percent of planning calls were served by the fallback `gpt-oss-20b` because of Groq's per-model token limit.
 - **Voice, real run:** "Calculate incentives for Mohammed Ali, then approve Mohammed Ali's payout" prepared the payout, paused with the exact figures (1 payment and the ₹ total), sent only after a second confirm, and "refresh the payment status, then tell me how many payments completed" reported it completed. This run was made against the previous payment provider; repeat it on Cashfree.
 - **Voice panel in a browser** (typed commands, Playwright): a pending question survives closing the panel and a full page reload, the answer continues the same request, the plan card shows Confirm and Cancel, and "yes please" confirms and runs.
@@ -145,7 +150,12 @@ Lets a business that runs HR on Zoho People start paying through BolPay without 
 - **Payments.** PayPal Payouts, Orders and the `/checkout` page were removed. `app/lib/cashfree/` now holds a Payouts V2 client (`rest.ts`, two auth headers, no token exchange) and the transfer logic (`payouts.ts`); `submitToCashfree`, `syncStatuses` and `applyWebhookTransfer` in `service.ts` use it.
 - **Recipients.** Workers have a UPI ID (`payoutUpi`) instead of a PayPal email. `schemaVersion` was bumped, so older data files reseed.
 - **Removed with PayPal:** the *awaiting sign-up* (`unclaimed`) status, *cancel and refund*, the PayPal accounts card on Integrations, sandbox-email assignment and the sandbox-accounts CSV export. UPI has no equivalent states: a transfer either succeeds, fails or is still processing.
-- **Open:** run the sandbox flow (see section 2), register the webhook, and decide how to handle UPI limits for large payouts.
+- **Open:** register the webhook and observe `TRANSFER_SUCCESS` (needs a public URL), exercise the Cashfree-side failure cases, and decide how to handle UPI limits for large payouts.
+- **Hardening (2026-11-20):** `MANUALLY_REJECTED` now maps to failed (it used to stay "processing" forever); the beneficiary status (`INVALID`, `FAILED`, `DELETED`) is checked before a transfer so a bad UPI ID fails with a clear reason; the Payouts screen says INR instead of USD.
+- **Setup lessons (Cashfree Payouts):**
+  - Payouts has its own API keys: Payment Gateway keys return 401 on the Payouts API. Generate them in Payouts > Developers > API Keys.
+  - The **Test environment needs no KYC**: open Payouts and use **Switch to Test** in the top bar (the "Try Test Environment" button leads to onboarding). It comes with test balance.
+  - Every Payouts call needs an identity check, in test as well as production, or it fails with `IP not whitelisted` (HTTP 403). Option 1: whitelist your IPv4 address (Developers > Two-Factor Authentication). It breaks whenever your IP changes and a hosted server has no fixed IP. Option 2 (used here): generate a **Public Key**, then click **Switch Method** and confirm; generating the key alone does not turn it on. BolPay then sends `X-Cf-Signature` (RSA-OAEP of `<clientId>.<unix time>`) on every request, so it works from any IP. Set `CASHFREE_PUBLIC_KEY` (PEM on one line with `\n`) or `CASHFREE_PUBLIC_KEY_PATH`. See `.env.example`.
 - **Speech.** Sarvam AI does speech-to-text (`saaras:v4`, language auto-detected) and text-to-speech (`bulbul:v3`). TTS has no auto-detect, so `app/lib/sarvam/languages.ts` picks the language from the reply text (the planner's language is only a hint): English fallbacks are spoken as English, and Urdu (no Sarvam voice) gets a 422 so the reply is text only. Replies are WAV; numbers over four digits get commas as Sarvam asks. The recorder stops at 28 s because REST speech-to-text is meant for clips under about 30 s, and one retry covers a 429 or 503.
 - **Unchanged:** the Zoho import sync fix and screen-refresh work from the earlier session still apply (a sync now hands fresh server data to the screens).
 
