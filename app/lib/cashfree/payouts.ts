@@ -136,6 +136,25 @@ export async function getTransfer(transferId: string): Promise<TransferResult> {
   return toResult(await cashfreeFetch<TransferResponse>(`/transfers?transfer_id=${encodeURIComponent(transferId)}`));
 }
 
+/**
+ * Verifies the older (V1) body-style webhook: the signature is a field inside the JSON. It is
+ * base64(HMAC-SHA256(every other field's value, joined in field-name order, client secret)).
+ * Cashfree's "Test & Add Webhook" ping uses this style, even when V2 is selected.
+ */
+export function verifyBodySignature(body: Record<string, unknown>): boolean {
+  const secret = process.env.CASHFREE_CLIENT_SECRET;
+  const { signature, ...rest } = body;
+  if (!secret || typeof signature !== "string") return false;
+  const data = Object.keys(rest)
+    .sort()
+    .map((k) => String(rest[k]))
+    .join("");
+  const expected = createHmac("sha256", secret).update(data).digest("base64");
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signature);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 /** Verifies x-webhook-signature: base64(HMAC-SHA256(timestamp + rawBody, client secret)). */
 export function verifyWebhookSignature(rawBody: string, signature: string | null, timestamp: string | null): boolean {
   const secret = process.env.CASHFREE_CLIENT_SECRET;
