@@ -93,6 +93,20 @@ check("India-time day boundary", () => { const e = exposure([spent(100, "2026-11
 check("isActive window", () => { const d = del(); assert.ok(isActive(d, Date.parse(NOW))); assert.ok(!isActive(d, Date.parse("2026-11-25T00:00:00Z"))); });
 check("newest active delegation wins", () => assert.equal(dec({ delegations: [del({ id: "old", createdAt: "2026-11-01T00:00:00Z" }), del({ id: "new", createdAt: "2026-11-19T01:00:00Z" })] }).delegationId, "new"));
 
+console.log("amount detection");
+check("2k shorthand and Bengali digits", () => {
+  assert.deepEqual(detectAmounts("Amar accident hoi gache, amar urgently 2k send korbo."), [2000]);
+  assert.deepEqual(detectAmounts("need 2.5k"), [2500]);
+  assert.deepEqual(detectAmounts("আমার ২,০০০ টাকা লাগবে"), [2000]);
+  assert.deepEqual(detectAmounts("ek hazar"), [1000]);
+});
+check("no amount in the words detects nothing, so the worker must type it", () => { assert.deepEqual(detectAmounts("আমার অ্যাক্সিডেন্ট হয়ে গেছে, টাকা দরকার"), []); assert.equal(reconcileAmount(null, "I need money urgently").amount, null); });
+check("an unclear amount is never guessed once the model has read the message", () => {
+  assert.equal(reconcileAmount(null, "maybe two or three thousand, not sure", true).amount, null);
+  assert.equal(reconcileAmount(null, "I need 3000", false).amount, 3000); // model unavailable: offered, worker confirms on screen
+});
+check("a model amount that is not in the words is rejected", () => assert.equal(reconcileAmount(20000, "I need 2000 rupees").mismatch, true));
+
 console.log("recovery");
 const adv = (id, amount, o = {}) => ({ id, status: "paid", amount, updatedAt: `2026-11-0${id.slice(-1)}T00:00:00Z`, ...o });
 const out = (list, reserved) => outstandingAdvances(list, reserved);

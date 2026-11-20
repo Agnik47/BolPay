@@ -182,6 +182,10 @@ export interface AdvanceRequest {
   language: string;
   /** What the worker said or typed, kept for approvers. Audio is never stored. */
   transcript?: string;
+  /** English translation of `transcript`, made by the server when the request was saved so a manager who doesn't read the language still understands it. Absent for English or when translation failed. */
+  transcriptEnglish?: string;
+  /** Whether the worker stressed urgency, in their own words. Shown to approvers as the worker's claim; it changes no rule. */
+  urgency?: "urgent" | "normal";
   source: "voice" | "text";
   /** Client-generated, so a retried submit returns the same request instead of a second one. */
   idempotencyKey: string;

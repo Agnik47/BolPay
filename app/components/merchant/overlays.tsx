@@ -46,7 +46,7 @@ export function ConfirmDialog({ open, title, children, confirmLabel, tone = "pri
   const root = useOverlay(open, busy ? () => {} : onCancel);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy-950/50 p-4 sm:items-center" onMouseDown={(e) => e.target === e.currentTarget && !busy && onCancel()}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-4 sm:items-center" onMouseDown={(e) => e.target === e.currentTarget && !busy && onCancel()}>
       <div ref={root} role="alertdialog" aria-modal="true" aria-labelledby={`${id}-t`} aria-describedby={`${id}-d`} className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-[0_24px_60px_-20px_rgba(15,23,42,0.5)]">
         <h2 id={`${id}-t`} className="text-lg font-semibold text-slate-900">{title}</h2>
         <div id={`${id}-d`} className="mt-2 text-sm text-slate-600">{children}</div>

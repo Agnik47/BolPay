@@ -18,6 +18,16 @@
   /* App background: a cool off-white so white panels read as surfaces. */
   --color-canvas: #f4f5f7;
 
+  /* Voice screen: a dark, immersive version of the BolPay teal. */
+  --color-voice-950: #04161a;
+  --color-voice-900: #071f25;
+  --color-voice-800: #0d3034;
+  --color-voice-teal: #008577;
+  --color-voice-deep: #006b62;
+  --color-voice-bright: #00bfa5;
+  --color-voice-cyan: #65e6d2;
+  --color-voice-muted: #a9dad2;
+
   --animate-toast-in: toast-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
   @keyframes toast-in {
     from {
@@ -32,7 +42,7 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-plex-sans), var(--font-plex-deva), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-plex-sans), var(--font-plex-deva), var(--font-noto-bengali), var(--font-noto-kannada), var(--font-noto-tamil), var(--font-noto-telugu), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 }
 
@@ -71,4 +81,15 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Slow drift for the voice screen's contour lines. The reduced-motion rule above already stills it. */
+@keyframes voice-drift {
+  from { transform: translate3d(0, 0, 0) scale(1.04); }
+  50% { transform: translate3d(-1.2%, 0.8%, 0) scale(1.07); }
+  to { transform: translate3d(0, 0, 0) scale(1.04); }
+}
+@keyframes voice-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
 }

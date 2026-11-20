@@ -1,5 +1,5 @@
 import { rateLimit, readJson, respondWorker } from "@/app/lib/server/http";
-import { myAdvanceState, ownRequest, submitAdvance } from "@/app/lib/server/advance-service";
+import { myAdvanceState, ownRequest, submittedReply, submitAdvance } from "@/app/lib/server/advance-service";
 import { runManagerAgent } from "@/app/lib/server/advance-agent";
 import { ServiceError } from "@/app/lib/server/service";
 
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     rateLimit(`advance-submit:${userId}`, 8, 10 * 60_000); // blocked attempts are saved too, so cap them
     if (!body) throw new ServiceError("Malformed JSON body");
     const s = (v: unknown, max = 600) => (typeof v === "string" ? v.slice(0, max) : "");
-    const saved = submitAdvance(workerId, {
+    const saved = await submitAdvance(workerId, {
       idempotencyKey: s(body.idempotencyKey, 64),
       amount: typeof body.amount === "number" ? body.amount : NaN,
       reasonText: s(body.reasonText, 400),
@@ -23,14 +23,16 @@ export async function POST(req: Request) {
       language: s(body.language, 8),
       source: s(body.source, 8),
       transcript: s(body.transcript),
+      urgency: s(body.urgency, 8),
       confirmed: body.confirmed === true,
       recoveryAck: body.recoveryAck === true,
     });
     // Under an active delegation the Manager Agent looks at the new request now. It never blocks the worker's save.
     if (!saved.duplicate && saved.request.status === "pending_review") {
       await runManagerAgent(saved.request.id);
-      return { request: ownRequest(workerId, saved.request.id), duplicate: false };
+      const request = ownRequest(workerId, saved.request.id);
+      return { request, duplicate: false, spoken: request.status === "pending_review" ? await submittedReply(s(body.language, 8)) : null };
     }
-    return saved;
+    return { ...saved, spoken: saved.request.status === "pending_review" && !saved.duplicate ? await submittedReply(s(body.language, 8)) : null };
   });
 }

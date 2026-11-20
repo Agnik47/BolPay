@@ -5,6 +5,7 @@ import { DEFAULT_ADVANCE_POLICY, evaluateEligibility } from "@/app/lib/advance/e
 import { reconcileAmount } from "@/app/lib/advance/amounts";
 import { advanceAmount, reservedByAdvance } from "@/app/lib/advance/recovery";
 import { extractAdvance } from "@/app/lib/ai/advance-intent";
+import { translateToEnglish } from "@/app/lib/sarvam/client";
 import { translateReply } from "@/app/lib/ai/translate";
 import type { AdvanceEligibility, AdvancePolicy, AdvanceReason, AdvanceRequest, Transaction } from "@/app/lib/merchant/types";
 import { getPeriod, getToday } from "./context";
@@ -97,12 +98,17 @@ export function myAdvanceState(workerId: string) {
 }
 
 /** Interprets what the worker said or typed. Persists nothing; the worker must confirm before anything is saved. */
-export async function previewAdvance(workerId: string, transcript: string) {
+export async function previewAdvance(workerId: string, transcript: string, opts: { languageCode?: string | null } = {}) {
   const text = transcript.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 600);
   if (!text) throw new ServiceError("Say or type what you need.");
-  const extracted = await extractAdvance(text);
-  const { amount, source, mismatch } = reconcileAmount(extracted?.amount ?? null, text);
-  const language = extracted?.language ?? "en";
+  // The language Sarvam heard (or the worker chose) decides the translation; the model's guess is the fallback.
+  const known = opts.languageCode ? opts.languageCode.split("-")[0].toLowerCase() : null;
+  let extracted = known ? null : await extractAdvance(text);
+  const language = known ?? extracted?.language ?? "en";
+  const english = await translateToEnglish(text, language);
+  if (known) extracted = await extractAdvance(text, english);
+  // The amount must appear in the worker's own words (or their translation); otherwise the worker types it.
+  const { amount, source, mismatch } = reconcileAmount(extracted?.amount ?? null, english ? `${text} ${english}` : text, extracted !== null);
   const reason = extracted?.reason ?? "other";
   const e = eligibilityFor(workerId, { amount: amount ?? undefined });
 
@@ -114,6 +120,9 @@ export async function previewAdvance(workerId: string, transcript: string) {
   }
   return {
     transcript: text,
+    englishTranslation: english,
+    translationFailed: language !== "en" && !english,
+    urgency: extracted?.urgency ?? "normal",
     language,
     amount,
     amountSource: source,
@@ -135,12 +144,13 @@ export interface SubmitInput {
   language: string;
   source: string;
   transcript: string;
+  urgency?: string;
   confirmed: boolean;
   recoveryAck: boolean;
 }
 
 /** Saves a worker-confirmed request. The amount is re-checked here; nothing is paid, and nothing is approved. */
-export function submitAdvance(workerId: string, input: SubmitInput) {
+export async function submitAdvance(workerId: string, input: SubmitInput) {
   expireStale();
   if (input.confirmed !== true) throw new ServiceError("Please confirm the amount and reason first.");
   if (input.recoveryAck !== true) throw new ServiceError("Please confirm that the advance is deducted from your next payroll.");
@@ -153,6 +163,14 @@ export function submitAdvance(workerId: string, input: SubmitInput) {
   const existing = advances().find((a) => a.workerId === workerId && a.idempotencyKey === input.idempotencyKey);
   if (existing) return { request: ownView(existing), duplicate: true };
 
+  // The English version for managers is made here from the saved original, never taken from the client.
+  const language = /^[a-z]{2,3}$/.test(input.language) ? input.language : "en";
+  const transcript = input.transcript.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 600);
+  const transcriptEnglish = transcript ? await translateToEnglish(transcript, language) : null;
+  // Re-check after the await: a retried submit may have saved this request meanwhile.
+  const raced = advances().find((a) => a.workerId === workerId && a.idempotencyKey === input.idempotencyKey);
+  if (raced) return { request: ownView(raced), duplicate: true };
+
   const eligibility = eligibilityFor(workerId, { amount: input.amount });
   const now = new Date().toISOString();
   const rejected = eligibility.blocks.length > 0;
@@ -162,8 +180,10 @@ export function submitAdvance(workerId: string, input: SubmitInput) {
     amount: input.amount,
     reasonText,
     reasonCategory: REASONS.includes(input.reasonCategory as AdvanceReason) ? (input.reasonCategory as AdvanceReason) : "other",
-    language: /^[a-z]{2,3}$/.test(input.language) ? input.language : "en",
-    transcript: input.transcript.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 600) || undefined,
+    language,
+    transcript: transcript || undefined,
+    transcriptEnglish: transcriptEnglish ?? undefined,
+    urgency: input.urgency === "urgent" ? "urgent" : "normal",
     source: input.source === "voice" ? "voice" : "text",
     idempotencyKey: input.idempotencyKey,
     status: rejected ? "rejected" : "pending_review",
@@ -347,4 +367,10 @@ export function settleAdvance(id: string, actor: Actor, input: { action?: unknow
   a.updatedAt = now;
   logAudit(input.action === "write_off" ? "advance.written_off" : "advance.repaid", `${a.id}: ₹${amount}, ${reason}`, undefined, actor.id);
   saveDb();
+}
+
+/** The line spoken to a worker once their request is really saved, in their language when it can be translated safely. */
+export async function submittedReply(language: string) {
+  const english = "Your emergency advance request has been submitted. Please wait for your employer to approve it.";
+  return { text: (await translateReply(english, language)) ?? english, language };
 }

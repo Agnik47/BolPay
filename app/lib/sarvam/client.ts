@@ -1,5 +1,5 @@
 import "server-only";
-import { pickSpeechLanguage, prepareForSpeech } from "./languages";
+import { pickSpeechLanguage, prepareForSpeech, ttsCode } from "./languages";
 
 const BASE_URL = "https://api.sarvam.ai";
 const STT_MODEL = process.env.SARVAM_STT_MODEL || "saaras:v4";
@@ -68,20 +68,70 @@ function audioFile(audio: Blob): { blob: Blob; name: string } {
  * Sarvam's REST endpoint is meant for clips under about 30 seconds; the recorder stops itself before that.
  */
 export async function transcribeAudio(audio: Blob): Promise<string> {
+  return (await transcribeWithLanguage(audio)).transcript;
+}
+
+/**
+ * Same, but also returns the BCP-47 code Sarvam detected (for example "bn-IN"). `hint` is a code the worker chose
+ * from the language list; without one Sarvam detects the language itself. A wrong hint makes transcription worse,
+ * so callers only pass one the worker picked on purpose.
+ */
+export async function transcribeWithLanguage(audio: Blob, hint?: string | null): Promise<{ transcript: string; languageCode: string | null }> {
   const { blob, name } = audioFile(audio);
+  const language = /^[a-z]{2,3}-IN$/.test(hint ?? "") ? (hint as string) : "unknown";
   const out = (await call(
     "/speech-to-text",
     () => {
       const form = new FormData();
       form.append("file", blob, name);
       form.append("model", STT_MODEL);
-      form.append("language_code", "unknown");
+      form.append("language_code", language);
       return { method: "POST", body: form };
     },
     STT_TIMEOUT_MS,
-  )) as { transcript?: unknown };
+  )) as { transcript?: unknown; language_code?: unknown };
   if (typeof out.transcript !== "string") throw new SarvamError("Unexpected transcription response.", 502);
-  return out.transcript;
+  return { transcript: out.transcript, languageCode: typeof out.language_code === "string" && /^[a-z]{2,3}-IN$/.test(out.language_code) ? out.language_code : null };
+}
+
+const TRANSLATE_MODEL = process.env.SARVAM_TRANSLATE_MODEL || "sarvam-translate:v1";
+const TRANSLATE_TIMEOUT_MS = 15_000;
+
+/** Digit groups in a text, with Bengali and Devanagari digits and thousands commas normalised. */
+function numbersIn(s: string): string[] {
+  const ascii = [...s].map((ch) => {
+    const c = ch.codePointAt(0)!;
+    return c >= 0x09e6 && c <= 0x09ef ? String(c - 0x09e6) : c >= 0x0966 && c <= 0x096f ? String(c - 0x0966) : ch;
+  }).join("");
+  return ascii.replace(/(?<=\d),(?=\d)/g, "").match(/\d+/g) ?? [];
+}
+
+/**
+ * Translates what a worker said into English for a manager who may not read the language. Returns null when the
+ * text is already English, the language has no Sarvam support, the call fails, or the translation drops a number
+ * that was written as digits (an amount must never change in translation). The original is always kept alongside.
+ */
+export async function translateToEnglish(text: string, languageCode: string): Promise<string | null> {
+  const source = ttsCode(languageCode);
+  if (!source || source === "en-IN" || !text.trim()) return null;
+  try {
+    const out = (await call(
+      "/translate",
+      () => ({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: text.slice(0, 900), source_language_code: source, target_language_code: "en-IN", model: TRANSLATE_MODEL }),
+      }),
+      TRANSLATE_TIMEOUT_MS,
+    )) as { translated_text?: unknown };
+    const english = typeof out.translated_text === "string" ? out.translated_text.trim() : "";
+    if (!english) return null;
+    const have = new Set(numbersIn(english));
+    return numbersIn(text).every((n) => have.has(n)) ? english : null;
+  } catch (err) {
+    console.error("translation failed", err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 /** Container of the bytes Sarvam returned. The docs promise WAV (the default codec); the header check keeps this honest. */

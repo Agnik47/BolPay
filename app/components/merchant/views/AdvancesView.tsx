@@ -208,11 +208,21 @@ export function AdvancesView() {
                   <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">
                     <p><span className="font-medium text-slate-900">{REASON[a.reasonCategory] ?? a.reasonCategory}:</span> <span className="text-slate-700">“{a.reasonText}”</span></p>
                     <p className="mt-0.5 text-xs text-slate-500">Stated by the worker; BolPay doesn&apos;t judge whether it&apos;s genuine. Source: {a.source === "voice" ? "voice" : "typed"} · {LANG[a.language] ?? a.language}</p>
+                    {a.urgency === "urgent" && <p className="mt-1"><Badge tone="red">Worker says it is urgent</Badge></p>}
                     {a.transcript && (
-                      <details className="mt-1.5 text-xs text-slate-600">
-                        <summary className="cursor-pointer font-medium text-brand-700">Original words</summary>
-                        <p className="mt-1 whitespace-pre-wrap break-words rounded border border-slate-200 bg-white p-2 italic">{a.transcript}</p>
-                      </details>
+                      <div className="mt-2 grid gap-2 text-xs text-slate-600 md:grid-cols-2">
+                        <div>
+                          <p className="mb-0.5 font-semibold uppercase tracking-wide text-slate-500">Original ({LANG[a.language] ?? a.language})</p>
+                          <p lang={a.language} className="whitespace-pre-wrap break-words rounded border border-slate-200 bg-white p-2 text-sm text-slate-800">{a.transcript}</p>
+                        </div>
+                        <div>
+                          <p className="mb-0.5 font-semibold uppercase tracking-wide text-slate-500">English translation</p>
+                          <p className="whitespace-pre-wrap break-words rounded border border-slate-200 bg-white p-2 text-sm text-slate-800">
+                            {a.language === "en" ? <span className="text-slate-500">Written in English.</span> : a.transcriptEnglish ?? <span className="text-amber-800">Translation unavailable. Use the original, or ask the worker.</span>}
+                          </p>
+                        </div>
+                        <p className="md:col-span-2 text-[11px] text-slate-400">Machine translation of the worker&apos;s own words, made when the request was saved. The amount above is what the worker confirmed. The audio is not kept.</p>
+                      </div>
                     )}
                   </div>
 
@@ -220,7 +230,7 @@ export function AdvancesView() {
                   {stale && <p className="mt-1 text-xs text-amber-800">The available limit has changed since the request was made (was {formatMoney(a.eligibility.available)}).</p>}
 
                   {a.agent && (
-                    <div className="mt-3 rounded-lg border border-brand-200 bg-brand-50/50 p-3 text-sm">
+                    <div className="mt-3 rounded-lg border border-teal-200 bg-teal-50/50 p-3 text-sm">
                       <p className="flex flex-wrap items-center gap-2 font-medium text-slate-900">
                         Manager Agent
                         <Badge tone={a.agent.action === "approve" ? "green" : a.agent.action === "recommend" ? "blue" : "amber"}>

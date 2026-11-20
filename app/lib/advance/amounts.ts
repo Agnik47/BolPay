@@ -30,10 +30,18 @@ const THOUSAND = new Set(["thousand", "hazar", "hazaar", "hajar", "हज़ा�
 export function detectAmounts(text: string): number[] {
   const t = toAsciiDigits(text).toLowerCase().replace(/(?<=\d),(?=\d)/g, "").replace(/[,₹]/g, " ").replace(/\s+/g, " ");
   const found = new Set<number>();
-  const tokens = t.split(/[\s.;:!?()"'।]+/).filter(Boolean);
+  const t2 = t.replace(/(\d+)\.(\d+)k\b/g, (_, w: string, f: string) => String(Math.round(Number(`${w}.${f}`) * 1000)));
+  const tokens = t2.split(/[\s.;:!?()"'।]+/).filter(Boolean);
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
     const next = tokens[i + 1];
+    // "2k" / "2.5k" shorthand, common when typing Romanised Hindi or Bengali.
+    const k = /^(\d+(?:\.\d+)?)k$/.exec(tok);
+    if (k) {
+      const v = Math.round(Number(k[1]) * 1000);
+      if (v >= 1 && v <= 1_000_000) found.add(v);
+      continue;
+    }
     const n = /^\d+$/.test(tok) ? Number(tok) : SMALL[tok];
     if (n !== undefined && next && THOUSAND.has(next)) {
       found.add(n * 1000);
@@ -49,13 +57,15 @@ export function detectAmounts(text: string): number[] {
 }
 
 /** Decide which amount to offer the worker, and whether to warn that the sources disagree. */
-export function reconcileAmount(modelAmount: number | null, text: string): { amount: number | null; source: "model" | "transcript" | "none"; mismatch: boolean } {
+export function reconcileAmount(modelAmount: number | null, text: string, modelRan = false): { amount: number | null; source: "model" | "transcript" | "none"; mismatch: boolean } {
   const detected = detectAmounts(text);
   const model = modelAmount !== null && Number.isInteger(modelAmount) && modelAmount > 0 ? modelAmount : null;
   if (model !== null) {
     if (detected.length === 0 || detected.includes(model)) return { amount: model, source: "model", mismatch: false };
     return { amount: null, source: "none", mismatch: true }; // the model's number isn't in the words: make the worker type it
   }
-  if (detected.length === 1) return { amount: detected[0], source: "transcript", mismatch: false };
+  // The model read the message and found no clear amount ("maybe two or three thousand"): never guess one from the words.
+  // Only when the model was unavailable is a single number in the words offered, and the worker confirms it on screen.
+  if (!modelRan && detected.length === 1) return { amount: detected[0], source: "transcript", mismatch: false };
   return { amount: null, source: "none", mismatch: false };
 }

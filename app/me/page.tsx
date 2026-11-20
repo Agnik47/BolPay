@@ -86,7 +86,7 @@ async function MyPay() {
           </Notice>
         )}
 
-        <AdvanceCard />
+        <AdvanceCard workerName={worker.name.split(" ")[0]} />
 
         <Card title="This period" className="mt-5">
           <div className="flex flex-wrap gap-1">

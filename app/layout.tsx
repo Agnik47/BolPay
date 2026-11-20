@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans, IBM_Plex_Sans_Devanagari } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans, IBM_Plex_Sans_Devanagari, Noto_Sans_Bengali, Noto_Sans_Kannada, Noto_Sans_Tamil, Noto_Sans_Telugu } from "next/font/google";
 import { InteractionSounds } from "./components/feedback/InteractionSounds";
 import "./globals.css";
 
@@ -17,6 +17,12 @@ const plexDeva = IBM_Plex_Sans_Devanagari({
   preload: false,
 });
 
+// Worker-facing voice screens show what was said in Bengali, Kannada, Tamil or Telugu. Each face loads only when a page uses that script.
+const notoBengali = Noto_Sans_Bengali({ variable: "--font-noto-bengali", subsets: ["bengali"], weight: ["400", "500", "600"], preload: false });
+const notoKannada = Noto_Sans_Kannada({ variable: "--font-noto-kannada", subsets: ["kannada"], weight: ["400", "500", "600"], preload: false });
+const notoTamil = Noto_Sans_Tamil({ variable: "--font-noto-tamil", subsets: ["tamil"], weight: ["400", "500", "600"], preload: false });
+const notoTelugu = Noto_Sans_Telugu({ variable: "--font-noto-telugu", subsets: ["telugu"], weight: ["400", "500", "600"], preload: false });
+
 const plexMono = IBM_Plex_Mono({
   variable: "--font-plex-mono",
   subsets: ["latin"],
@@ -30,7 +36,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${plexSans.variable} ${plexDeva.variable} ${plexMono.variable} h-full antialiased`}>
+    <html lang="en" className={`${plexSans.variable} ${plexDeva.variable} ${notoBengali.variable} ${notoKannada.variable} ${notoTamil.variable} ${notoTelugu.variable} ${plexMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         {children}
         <InteractionSounds />
