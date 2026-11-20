@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_RULES } from "@/app/lib/merchant/incentives";
 import { SEED_ATTENDANCE, SEED_PAYOUTS, SEED_TRANSACTIONS, SEED_WORKERS } from "@/app/lib/merchant/mock-data";
-import type { AttendanceRecord, IncentiveRules, Payout, Transaction, Worker } from "@/app/lib/merchant/types";
+import type { AdvancePolicy, Delegation, AdvanceRequest, AttendanceRecord, IncentiveRules, Payout, Transaction, Worker } from "@/app/lib/merchant/types";
 
 /**
  * File-backed JSON databases under .data/, one per workspace:
@@ -26,6 +26,8 @@ export interface AuditEntry {
   at: string;
   action: string;
   detail: string;
+  /** Who did it, when known: a user id, "worker:<id>" or "system". Absent on older entries. */
+  actor?: string;
 }
 
 export interface Db {
@@ -38,6 +40,10 @@ export interface Db {
   rules: IncentiveRules;
   payouts: Payout[];
   transactions: Transaction[];
+  /** BolPay Advance (optional, added without a schema bump so existing data files stay valid). */
+  advances?: AdvanceRequest[];
+  advancePolicy?: AdvancePolicy;
+  delegations?: Delegation[];
 }
 
 // DATA_DIR lets a host with a read-only project folder (Vercel) keep the JSON files in a writable one such as /tmp.
@@ -89,9 +95,9 @@ export function getDb(ws: Workspace = getWorkspace()): Db {
 }
 
 /** Appends to the audit log (calculations, approvals, rule changes, imports). Capped to stay small. */
-export function logAudit(action: string, detail: string, ws: Workspace = getWorkspace()) {
+export function logAudit(action: string, detail: string, ws: Workspace = getWorkspace(), actor?: string) {
   const db = getDb(ws);
-  db.audit.push({ at: new Date().toISOString(), action, detail });
+  db.audit.push({ at: new Date().toISOString(), action, detail, ...(actor ? { actor } : {}) });
   if (db.audit.length > 500) db.audit.splice(0, db.audit.length - 500);
 }
 

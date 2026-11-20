@@ -159,7 +159,10 @@ export function PayoutsView() {
                           </div>
                         </td>
                         <td className={`${td} whitespace-nowrap`}>{p.periodLabel}</td>
-                        <td className={`${td} text-right font-semibold tabular-nums text-slate-900`}>{formatMoney(p.amount)}</td>
+                        <td className={`${td} text-right font-semibold tabular-nums text-slate-900`}>
+                          {formatMoney(p.amount)}
+                          {p.deductions?.length ? <span className="block text-xs font-normal text-amber-700">after {formatMoney((p.grossAmount ?? p.amount) - p.amount)} advance recovery</span> : null}
+                        </td>
                         <td className={`${td} text-right`}>
                           <Button variant="ghost" size="sm" onClick={() => setOpenId(openId === p.id ? null : p.id)} aria-expanded={openId === p.id}>
                             {openId === p.id ? "Hide" : "Details"}
@@ -176,8 +179,14 @@ export function PayoutsView() {
                               <dt>Performance ({b.extraUnits} extra units)</dt><dd className="text-right tabular-nums">{formatMoney(b.performanceIncentive)}</dd>
                               <dt>Delivery tiers</dt><dd className="text-right tabular-nums">{formatMoney(b.tierBonus ?? 0)}</dd>
                               <dt>Attendance bonus</dt><dd className="text-right tabular-nums">{formatMoney(b.attendanceBonus)}</dd>
-                              <dt className="border-t border-slate-200 pt-1 font-medium text-slate-900">Total</dt>
-                              <dd className="border-t border-slate-200 pt-1 text-right font-medium tabular-nums text-slate-900">{formatMoney(p.amount)}</dd>
+                              <dt className="border-t border-slate-200 pt-1 font-medium text-slate-900">Total earned</dt>
+                              <dd className="border-t border-slate-200 pt-1 text-right font-medium tabular-nums text-slate-900">{formatMoney(p.grossAmount ?? p.amount)}</dd>
+                              {p.deductions?.length ? (
+                                <>
+                                  <dt className="text-amber-700">Advance recovery</dt><dd className="text-right tabular-nums text-amber-700">−{formatMoney((p.grossAmount ?? p.amount) - p.amount)}</dd>
+                                  <dt className="font-medium text-slate-900">Sent to worker</dt><dd className="text-right font-medium tabular-nums text-slate-900">{formatMoney(p.amount)}</dd>
+                                </>
+                              ) : null}
                             </dl>
                             <p className="mt-2 text-xs text-slate-500">Calculated with rules v{p.ruleVersion ?? 1}.</p>
                             <div className="mt-3 flex gap-2">

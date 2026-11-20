@@ -85,12 +85,13 @@ const STATUS_TONE: Record<string, keyof typeof DOT> = {
   pending: "amber", approved: "green", rejected: "red", needs_review: "amber",
   processing: "blue", completed: "green", failed: "red",
   active: "green", inactive: "slate",
+  pending_review: "amber", cancelled: "slate", expired: "slate", paying: "blue", paid: "green", payment_failed: "red",
 };
-const STATUS_LABEL: Record<string, string> = { half: "Half day", leave: "On leave", needs_review: "Needs review" };
+const STATUS_LABEL: Record<string, string> = { half: "Half day", leave: "On leave", needs_review: "Needs review", pending_review: "Waiting for review", payment_failed: "Payment failed", paying: "Sending" };
 
 export function StatusBadge({ status }: { status: string }) {
   return (
-    <Badge tone={STATUS_TONE[status] ?? "slate"} pulse={status === "processing"}>
+    <Badge tone={STATUS_TONE[status] ?? "slate"} pulse={status === "processing" || status === "paying"}>
       {STATUS_LABEL[status] ?? status.charAt(0).toUpperCase() + status.slice(1)}
     </Badge>
   );
@@ -239,3 +240,16 @@ export const th = `${TH} text-left`;
 export const thRight = `${TH} text-right`;
 export const td = "whitespace-nowrap px-4 py-2.5 text-sm";
 export const linkClass = "font-medium text-teal-700 hover:text-teal-800 hover:underline";
+
+/** Sandbox or live badge for anything that touches payments. `live` comes from the server (CASHFREE_ENVIRONMENT). */
+export function EnvBadge({ live }: { live: boolean }) {
+  return live ? (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2 py-px text-xs font-semibold text-rose-800" title="Cashfree production: real money moves">
+      <span className="size-1.5 rounded-full bg-rose-500" /> Cashfree live
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-px text-xs font-semibold text-amber-900" title="Cashfree sandbox: test transfers only, no real money">
+      <span className="size-1.5 rounded-full bg-amber-500" /> Cashfree sandbox
+    </span>
+  );
+}

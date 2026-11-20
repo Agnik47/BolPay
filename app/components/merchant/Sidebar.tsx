@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { IconApprove, IconAttendance, IconIntegrations, IconLedger, IconOverview, IconSettings, IconTiers, IconWorkers } from "../icons";
+import { IconAdvance, IconApprove, IconAttendance, IconIntegrations, IconLedger, IconOverview, IconSettings, IconTiers, IconWorkers } from "../icons";
 import { WorkspaceSwitch } from "./WorkspaceSwitch";
 
 type Role = "owner" | "supervisor";
@@ -15,6 +15,7 @@ const NAV = [
   { href: "/attendance", label: "Attendance", Icon: IconAttendance },
   { href: "/incentives", label: "Incentives", Icon: IconTiers },
   { href: "/payouts", label: "Payout approvals", Icon: IconApprove },
+  { href: "/advances", label: "Advances", Icon: IconAdvance },
   { href: "/transactions", label: "Transactions", Icon: IconLedger },
   { href: "/integrations", label: "Integrations", Icon: IconIntegrations },
   { href: "/settings", label: "Settings", Icon: IconSettings },

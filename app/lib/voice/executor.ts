@@ -61,7 +61,7 @@ export function previewMoney(step: ResolvedStep): MoneyPreview | null {
   const items =
     step.action === "approve_payouts"
       ? db.payouts.filter((p) => p.status === "pending" && ids.includes(p.workerId)).map((p) => ({ workerId: p.workerId, amount: p.amount }))
-      : db.transactions.filter((t) => t.status === "failed" && t.periodLabel === getPeriod().label && ids.includes(t.workerId)).map((t) => ({ workerId: t.workerId, amount: t.amount }));
+      : db.transactions.filter((t) => t.kind !== "advance" && t.status === "failed" && t.periodLabel === getPeriod().label && ids.includes(t.workerId)).map((t) => ({ workerId: t.workerId, amount: t.amount }));
   const skipped = [...new Set(items.filter((i) => !db.workers.find((w) => w.id === i.workerId)?.payoutUpi).map((i) => nameOf(i.workerId)))];
   return {
     count: items.length,
@@ -141,7 +141,7 @@ async function runStep(step: ResolvedStep, dryRun: boolean): Promise<StepOutcome
     }
 
     case "retry_failed": {
-      const failed = db.transactions.filter((t) => t.status === "failed" && t.periodLabel === getPeriod().label && ids.includes(t.workerId));
+      const failed = db.transactions.filter((t) => t.kind !== "advance" && t.status === "failed" && t.periodLabel === getPeriod().label && ids.includes(t.workerId));
       if (!failed.length) return { ok: true, skipped: true, message: "No failed payments matched." };
       if (dryRun) return { ok: true, message: `Would have retried ${count(failed.length, "failed payment")}.` };
       let retried = 0;

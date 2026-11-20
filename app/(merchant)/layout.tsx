@@ -20,6 +20,7 @@ async function AuthedShell({ children }: { children: React.ReactNode }) {
         displayName: session.displayName,
         role: session.role === "owner" ? "owner" : "supervisor",
         businessName: session.business.name,
+        liveCashfree: process.env.CASHFREE_ENVIRONMENT === "production",
       }}
     >
       {children}

@@ -6,7 +6,9 @@ import { formatDateTime, formatMoney } from "@/app/lib/merchant/format";
 import { Avatar, buttonClass, Card, EmptyState, linkClass, Notice, PageHeader, Stat, Stats, StatusBadge, td, th, thRight } from "../ui";
 
 export function DashboardView() {
-  const { workers, today, period, payouts, transactions, workerById } = useStore();
+  const { workers, today, period, payouts, transactions: allTransactions, workerById } = useStore();
+  // Payroll figures exclude emergency advances, which are reported on the Advances page.
+  const transactions = allTransactions.filter((t) => t.kind !== "advance");
   const records = usePeriodRecords();
   const pay = usePeriodPay();
 

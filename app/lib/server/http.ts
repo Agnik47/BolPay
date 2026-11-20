@@ -73,3 +73,34 @@ export async function requestWorkspace(): Promise<Workspace> {
 export async function withRequestWorkspace<T>(fn: () => Promise<T>): Promise<T> {
   return runInWorkspace(await requestWorkspace(), fn);
 }
+
+/**
+ * Like respond(), for worker-facing routes: the caller must be a signed-in worker linked to a worker profile,
+ * the response is only what `fn` returns (never the company snapshot), and the demo dataset is used because
+ * worker sessions don't carry a dataset yet. `fn` receives the worker id from the verified session.
+ */
+export async function respondWorker(fn: (ctx: { workerId: string; userId: string }) => Promise<unknown> | unknown) {
+  await connection();
+  return runInWorkspace("demo", async () => {
+    try {
+      const session = await requireApiRole(["worker"]);
+      if (!session.workerRef) throw new ServiceError("Your login isn't linked to a worker profile yet.", 403);
+      return NextResponse.json(await fn({ workerId: session.workerRef, userId: session.userId }));
+    } catch (err) {
+      if (err instanceof ServiceError) return NextResponse.json({ error: err.message }, { status: err.status });
+      console.error(err);
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    }
+  });
+}
+
+const buckets = () => ((globalThis as unknown as { __rate?: Map<string, number[]> }).__rate ??= new Map());
+
+/** In-memory sliding-window limit per key (single process, like the rest of the data layer). Throws a 429. */
+export function rateLimit(key: string, max: number, windowMs: number) {
+  const now = Date.now();
+  const hits = (buckets().get(key) ?? []).filter((t: number) => now - t < windowMs);
+  if (hits.length >= max) throw new ServiceError("Too many requests. Please wait a few minutes and try again.", 429);
+  hits.push(now);
+  buckets().set(key, hits);
+}

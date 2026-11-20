@@ -14,7 +14,7 @@ const some = (names: string[], max = 6) => (names.length <= max ? names.join(", 
 export function answerQuery(kind: string, o: { workerIds: string[] | null; date: string; n: number | null }): string {
   const db = getDb();
   const nameOf = (id: string) => db.workers.find((w) => w.id === id)?.name ?? "Unknown";
-  const txs = db.transactions.filter((t) => t.periodLabel === getPeriod().label);
+  const txs = db.transactions.filter((t) => t.kind !== "advance" && t.periodLabel === getPeriod().label);
   const payouts = db.payouts.filter((p) => p.periodId === getPeriod().id);
   const active = db.workers.filter((w) => w.status === "active");
   const records = db.attendance.filter((r) => r.date >= getPeriod().start && r.date <= getPeriod().end);

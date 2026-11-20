@@ -8,6 +8,8 @@ export interface Viewer {
   displayName: string;
   role: ViewerRole;
   businessName: string;
+  /** True when CASHFREE_ENVIRONMENT=production (read on the server). */
+  liveCashfree: boolean;
 }
 
 /**

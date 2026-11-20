@@ -5,7 +5,7 @@ import { useStore } from "@/app/lib/merchant/store";
 import { formatDateTime, formatMoney } from "@/app/lib/merchant/format";
 import type { TransactionStatus } from "@/app/lib/merchant/types";
 import { useToast } from "../../feedback/Toaster";
-import { Avatar, Button, Card, EmptyState, PageHeader, Segmented, Stat, Stats, StatusBadge, td, th, thRight } from "../ui";
+import { Avatar, Badge, Button, Card, EmptyState, PageHeader, Segmented, Stat, Stats, StatusBadge, td, th, thRight } from "../ui";
 
 type Filter = "all" | TransactionStatus;
 const FILTERS: { value: Filter; label: string }[] = [
@@ -67,7 +67,7 @@ export function TransactionsView() {
                   const name = w?.name ?? "this worker";
                   return (
                     <tr key={t.id}>
-                      <td className={td}><div className="flex items-center gap-2.5"><Avatar name={w?.name ?? "?"} /><span className="font-medium text-slate-900">{w?.name ?? "Unknown worker"}</span></div></td>
+                      <td className={td}><div className="flex items-center gap-2.5"><Avatar name={w?.name ?? "?"} /><span className="font-medium text-slate-900">{w?.name ?? "Unknown worker"}</span>{t.kind === "advance" && <Badge tone="blue">Advance</Badge>}</div></td>
                       <td className={`${td} font-mono text-xs`}>{hasReference(t.reference) ? t.reference : <span className="font-sans text-slate-400">Not assigned</span>}</td>
                       <td className={`${td} whitespace-nowrap`}>{t.periodLabel}</td>
                       <td className={`${td} whitespace-nowrap text-slate-500`}>{formatDateTime(t.createdAt)}</td>
@@ -79,7 +79,8 @@ export function TransactionsView() {
                         {t.failureReason && <p className="mt-1 max-w-[16rem] whitespace-normal text-xs text-rose-700">{t.failureReason}</p>}
                       </td>
                       <td className={`${td} text-right`}>
-                        {t.status === "failed" && (
+                        {t.status === "failed" && t.kind === "advance" && <span className="text-xs text-slate-500">Retry in Advances</span>}
+                        {t.status === "failed" && t.kind !== "advance" && (
                           <Button size="sm" disabled={retrying === t.id} onClick={() => void retry(t.id, name)} title={w?.payoutUpi ? undefined : "Add a UPI ID on the Workers page first"}>
                             {retrying === t.id ? "Retrying…" : "Retry"}
                           </Button>
