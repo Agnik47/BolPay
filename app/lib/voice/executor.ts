@@ -13,6 +13,12 @@ import {
   syncTransactions,
   updateWorker,
 } from "@/app/lib/server/service";
+import { formatMoney as money } from "@/app/lib/merchant/format";
+import { runFundingAgent } from "@/app/lib/cashfree/mcp/agent";
+import { runManagerAgent } from "@/app/lib/server/advance-agent";
+import { submitAdvance } from "@/app/lib/server/advance-service";
+import { roleMayUse } from "./catalog";
+import { chatReply, explainTopic } from "./knowledge";
 import { answerQuery } from "./queries";
 import { resolveSelector } from "./selectors";
 import type { MoneyPreview, ResolvedStep, Selector } from "./types";
@@ -81,11 +87,14 @@ export function describePreview(p: MoneyPreview): string {
 
 const failMessage = (e: unknown) => (e instanceof ServiceError ? e.message : "Something went wrong");
 
-async function runStep(step: ResolvedStep, dryRun: boolean, role: VoiceRole = "owner"): Promise<StepOutcome & { navigate?: string }> {
+async function runStep(step: ResolvedStep, dryRun: boolean, ctx: VoiceCtx): Promise<StepOutcome & { navigate?: string }> {
+  const role = ctx.role;
   const db = getDb();
   const a = step.args;
   const date = (a.date as string | null) ?? getToday();
-  const ids = step.action === "add_worker" || step.action === "set_rule" || step.action === "set_tier" || step.action === "remove_tier" || step.action === "navigate" || step.action === "sync_status" ? [] : targets(step);
+  const NO_TARGETS = ["add_worker", "set_rule", "set_tier", "remove_tier", "navigate", "sync_status", "chat", "explain", "request_advance", "check_funding"];
+  // A worker's questions are always about themselves, so they never resolve other people.
+  const ids = NO_TARGETS.includes(step.action) || ctx.role === "worker" ? [] : targets(step);
   if (ids === null) return { ok: false, message: "I couldn't work out which workers you meant." };
   const nameOf = (id: string) => db.workers.find((w) => w.id === id)?.name ?? "Unknown";
   const dateWord = date === getToday() ? "today" : date;
@@ -218,7 +227,45 @@ async function runStep(step: ResolvedStep, dryRun: boolean, role: VoiceRole = "o
     }
 
     case "query":
-      return { ok: true, message: answerQuery(a.query as string, { workerIds: a.workers ? ids : null, date, n: (a.n as number | null) ?? null, role }) };
+      return { ok: true, message: answerQuery(a.query as string, { workerIds: a.workers ? ids : null, date, n: (a.n as number | null) ?? null, role, who: ctx }) };
+
+    case "chat":
+      return { ok: true, message: chatReply(a.kind as string, ctx, (a.period as string | null) ?? null) };
+
+    case "explain":
+      return { ok: true, message: explainTopic(a.topic as string, ctx) };
+
+    case "request_advance": {
+      if (!ctx.workerId) return { ok: false, message: "Your login isn't linked to a worker profile, so I can't send a request." };
+      const amount = Number(a.amount);
+      if (dryRun) return { ok: true, message: `Dry run: an advance request for ${money(amount)} would be sent to your employer.` };
+      // The same service the Emergency advance screen uses: it re-checks eligibility, deduplicates, and never pays anything.
+      const saved = await submitAdvance(ctx.workerId, {
+        idempotencyKey: String(a.requestKey ?? ""),
+        amount,
+        reasonText: String(a.reasonText ?? a.reason ?? "Emergency advance").slice(0, 200),
+        reasonCategory: String(a.reason ?? "other"),
+        language: String(a.language ?? "en").slice(0, 8),
+        source: "voice",
+        transcript: String(a.transcript ?? ""),
+        urgency: String(a.urgency ?? "normal"),
+        confirmed: true,
+        recoveryAck: true,
+      });
+      if (!saved.duplicate && saved.request.status === "pending_review") await runManagerAgent(saved.request.id);
+      if (saved.request.status === "rejected") return { ok: false, message: `I couldn't send that request: ${saved.request.statusNote ?? "you're not eligible right now."}` };
+      return { ok: true, message: `Your advance request for ${money(saved.request.amount)} has been sent to your employer (request ${saved.request.id}). You won't be paid until they approve it, and I'll only say it is paid once Cashfree confirms.` };
+    }
+
+    case "check_funding": {
+      if (dryRun) return { ok: true, message: "Would ask the Cashfree funding agent whether payroll is covered." };
+      try {
+        const r = await runFundingAgent("Can we cover this period's payroll with our Cashfree settlements? When does the next settlement arrive?", ctx.name || "owner");
+        return { ok: true, message: r.answer };
+      } catch (e) {
+        return { ok: false, message: e instanceof Error ? e.message : "The funding check failed." };
+      }
+    }
 
     case "navigate": {
       const path = PAGE_PATH[a.page as string];
@@ -228,13 +275,22 @@ async function runStep(step: ResolvedStep, dryRun: boolean, role: VoiceRole = "o
   return { ok: false, message: "That action isn't supported." };
 }
 
-export type VoiceRole = "owner" | "supervisor";
+export type VoiceRole = "owner" | "supervisor" | "worker";
+
+/** Who is talking, from the verified server session (never from the browser or the model). */
+export interface VoiceCtx {
+  role: VoiceRole;
+  name: string;
+  workerId: string | null;
+}
 
 /** Supervisors record the day's work and prepare payouts; everything else is owner-only. */
-const SUPERVISOR_ACTIONS = new Set(["mark_attendance", "record_overtime", "record_units", "prepare_payouts", "query", "navigate"]);
+const SUPERVISOR_ACTIONS = new Set(["mark_attendance", "record_overtime", "record_units", "prepare_payouts", "query", "navigate", "chat", "explain"]);
 
+/** The catalog says which roles an action exists for; supervisors are narrowed further to their own actions. */
 export function allowedFor(role: VoiceRole, step: ResolvedStep) {
-  return role === "owner" || SUPERVISOR_ACTIONS.has(step.action);
+  if (!roleMayUse(role, step.action)) return false;
+  return role === "supervisor" ? SUPERVISOR_ACTIONS.has(step.action) : true;
 }
 
 /**
@@ -242,13 +298,14 @@ export function allowedFor(role: VoiceRole, step: ResolvedStep) {
  * money step whose exact figures the manager hasn't confirmed (or whose figures changed since).
  * With dryRun nothing is written and Cashfree is never called.
  */
-export async function runPlan(steps: ResolvedStep[], cursor: number, dryRun: boolean, role: VoiceRole = "supervisor"): Promise<RunResult> {
+export async function runPlan(steps: ResolvedStep[], cursor: number, dryRun: boolean, ctx: VoiceCtx = { role: "supervisor", name: "", workerId: null }): Promise<RunResult> {
+  const role = ctx.role;
   const outcomes: Record<number, StepOutcome> = {};
   let navigate: string | undefined;
   for (let i = cursor; i < steps.length; i++) {
     const step = steps[i];
     if (!allowedFor(role, step)) {
-      outcomes[i] = { ok: false, message: "Only the owner can do that. Ask the owner to approve it." };
+      outcomes[i] = { ok: false, message: role === "worker" ? "That's not something I can do for you. Your employer handles it." : "Only the owner can do that. Ask the owner to approve it." };
       return { outcomes, cursor: i + 1, navigate };
     }
     if (step.risk === "money" && dryRun && steps.slice(0, i).some((x) => x.risk !== "read")) {
@@ -264,7 +321,7 @@ export async function runPlan(steps: ResolvedStep[], cursor: number, dryRun: boo
       }
       if (live && (!step.expect || !samePreview(step.expect, live))) return { outcomes, cursor: i, checkpoint: { stepIndex: i, preview: live }, navigate };
     }
-    const out = await runStep(step, dryRun, role);
+    const out = await runStep(step, dryRun, ctx);
     outcomes[i] = { ok: out.ok, skipped: out.skipped, message: out.message };
     if (out.navigate) navigate = out.navigate;
     if (!out.ok) return { outcomes, cursor: i + 1, navigate };

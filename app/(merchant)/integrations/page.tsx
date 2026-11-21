@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { requireRole } from "@/app/lib/auth/dal";
+import { RelayCard } from "@/app/components/merchant/RelayCard";
+import { FundingAgentCard } from "@/app/components/merchant/FundingAgentCard";
 import { ZohoView } from "@/app/components/merchant/views/ZohoView";
 import { ContentSkeleton } from "@/app/components/Skeleton";
 
@@ -16,5 +18,15 @@ export default function Page() {
 
 async function AuthedIntegrations() {
   await requireRole(["owner"]);
-  return <ZohoView />;
+  return (
+    <>
+      <ZohoView />
+      <div className="mt-5">
+        <FundingAgentCard manage />
+      </div>
+      <div className="mt-5">
+        <RelayCard />
+      </div>
+    </>
+  );
 }

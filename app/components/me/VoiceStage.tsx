@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { IconClose, IconMic } from "../icons";
 import { api, JSON_HEADERS, LANGS, PICKER, type Preview } from "./advance-shared";
 import { playWithLevel, useMicRecorder } from "./useVoiceAudio";
+import { VoiceBackdrop } from "./VoiceBackdrop";
 import { VoiceOrb, type OrbState } from "./VoiceOrb";
 
 interface Props {
@@ -27,19 +28,6 @@ const HEADLINE: Record<OrbState, [string, string]> = {
   error: ["", ""],
 };
 
-/** Contour lines for the background: deterministic, so server and client render the same thing. */
-function contourPaths() {
-  return Array.from({ length: 16 }, (_, i) => {
-    const y0 = 40 + i * 52;
-    let d = "";
-    for (let x = 0; x <= 1240; x += 40) {
-      const y = y0 + Math.sin(x / 140 + i * 0.7) * 20 + Math.sin(x / 61 + i * 1.3) * 7;
-      d += `${x === 0 ? "M" : "L"}${x} ${y.toFixed(1)} `;
-    }
-    return d;
-  });
-}
-
 const iso = (code: string | null | undefined) => (code ?? "").split("-")[0].toLowerCase();
 
 export function VoiceStage({ mode, workerName, language, onLanguage, respond, onResult, onClose }: Props) {
@@ -56,7 +44,6 @@ export function VoiceStage({ mode, workerName, language, onLanguage, respond, on
   const alive = useRef(true);
   const abort = useRef<AbortController | null>(null);
   const dialog = useRef<HTMLDivElement>(null);
-  const paths = useMemo(contourPaths, []);
   const languageRef = useRef(language);
   useEffect(() => { languageRef.current = language; }, [language]);
 
@@ -159,11 +146,7 @@ export function VoiceStage({ mode, workerName, language, onLanguage, respond, on
 
   return (
     <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label="BolPay Voice AI" className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-voice-950 text-white outline-none">
-      {/* Backdrop: soft radial light and slowly drifting contour lines */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_42%,var(--color-voice-800)_0%,var(--color-voice-900)_48%,var(--color-voice-950)_100%)]" />
-      <svg aria-hidden viewBox="0 0 1240 900" preserveAspectRatio="xMidYMid slice" className="pointer-events-none absolute inset-0 size-full animate-[voice-drift_46s_ease-in-out_infinite] text-voice-bright opacity-[0.1]">
-        {paths.map((d, i) => <path key={i} d={d} fill="none" stroke="currentColor" strokeWidth="1" opacity={0.45 + (i % 4) * 0.15} />)}
-      </svg>
+      <VoiceBackdrop />
 
       {/* Top bar */}
       <header className="relative flex items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6">

@@ -38,6 +38,25 @@ Rules that keep it safe:
 - **The session survives** closing the panel, tapping the mic again, and reloading the page (id in `sessionStorage`; the plan itself is on the server, 15 minute idle timeout). Only **New conversation** (or the timeout) resets it.
 - Worker emails and phone numbers are never sent to the model.
 
+## Unified assistant: conversation, knowledge, memory and workers
+
+One pipeline serves everyone. Owners, supervisors and workers all use `POST /api/voice/turn`, typed or spoken. The role, name and worker record come from the verified session; the browser and the model never supply them.
+
+What was added on top of the planner, resolver and executor above:
+
+- **`chat` and `explain` actions** (catalog). `chat` answers greetings, thanks, goodbyes, "how are you", identity and capabilities, and mirrors the time of day the person named. `explain` answers "how does BolPay work" from `app/lib/voice/knowledge.ts`: short, fixed texts written from how the product behaves, with the live incentive rules, advance policy and Cashfree mode filled in. A topic nobody documented returns "I don't have documented information about that" instead of a guess. Unrelated questions get a polite scope reply.
+- **More read-only queries** (all computed from records or the pay engine, never by the model): `worker_count`, `worker_details`, `pay_breakdown`, `absent_list`, `total_paid`, `incentive_total`, `worker_payment_status`, `advance_summary`. `totals`, `worker_count` and `incentive_total` respect a city or group selection.
+- **Conversation memory.** The last four exchanges are replayed to the planner as real user/assistant messages, plus "most recently mentioned workers", so "only Bengaluru", "what is his daily wage" and "mark him absent" work. Names must still match the worker list, and money-moving steps are never replayed as history. A session can only be continued by the user who started it.
+- **Roles.** Each catalog action lists the roles it exists for (`roles`), and the planner prompt shows a role only its own actions. Workers get a short prompt with no worker list: they can ask `my_pay` and `my_advance`, chat, explain, and `request_advance`. Anything about other people or any write is declined (`not_allowed`).
+- **Worker advance by voice.** `request_advance` checks the amount against what was actually said (an unclear amount is asked for, never guessed), checks eligibility before offering a confirmation, discloses the deduction, and on confirm goes through the same `submitAdvance` and manager agent as the Emergency advance screen. Nothing is paid until the owner approves.
+- **Payments.** "Pay <name>" prepares and approves that worker's *calculated* payout, with the exact-amount checkpoint. A request to pay a specific rupee amount is answered with `custom_amount_payment`: BolPay has no custom-amount transfer.
+- **Language.** Replies are translated into the language the person used (the number guard accepts Bengali and Devanagari numerals). Romanised Hindi and Bengali are treated as English.
+- **UI.** `AssistantStage` is the full-screen orb for every role: the "Voice mode" button in the staff panel, and "Talk to BolPay AI" on `/me`. It uses the real microphone level and the real reply audio for the orb, shows the transcript as heard, the reply, the steps and the confirm checkpoint.
+
+Add a conversation topic: add the id to the `explain` slot in `catalog.json` and a text in `TOPICS` in `knowledge.ts`. Add a query: add a kind to `queryKinds` and a `case` in `answerQuery` (`queries.ts`).
+
+`npm run test:voice` fixtures can run as another user: set `"as": "worker"` (or `"supervisor"`) on a case. They need the dev server, a Groq key, and pauses between turns (`EVAL_PAUSE_MS`). **Budget:** a planner call is about 3,300 to 3,700 tokens, and Groq's free tier allows 200,000 tokens per model per *day* as well as 8,000 per minute, so roughly 55 planner calls per model per day. A full run of this suite (about 80 turns) does not fit in one free-tier day; run it in parts, or on a paid key. The server logs the Groq limit message on a 429 (and token usage with `VOICE_DEBUG=1`). A real deployment needs a paid key.
+
 ## The pattern catalog: `app/lib/voice/catalog.json`
 
 Every action, its slots (type, required, the question to ask), its summary template, examples, the confirm and cancel phrases in several languages, and the planner's rules are data in this one file. The planner prompt and the JSON validation are generated from it.
@@ -114,3 +133,11 @@ Note on the "add a rider, then mark him present" query: steps are validated up f
 - Money steps show real ₹ and US$ figures, and nothing is sent until you confirm them.
 - A closed and reopened panel (and a reloaded page) still shows the pending question or plan.
 - `GET /api/voice/metrics` shows your turns, with no errors.
+
+## Payroll Funding Agent (Cashfree MCP)
+
+`app/lib/cashfree/mcp/` is an MCP client for `https://mcp.cashfree.com/mcp` (Payment Gateway data: settlements, transactions). The owner signs in once at `/integrations` (OAuth 2.1 + PKCE with dynamic client registration, via `@modelcontextprotocol/sdk`); tokens are stored per business in `.data/cashfree-mcp.json`.
+- `agent.ts`: a Groq tool-calling loop (max 5 steps). It sees only read-only MCP tools (`get_`/`search_`/`list_`, preferring `get_unsettled_amount`, `get_next_settlement_date`, `search_standard_settlements`, on-demand settlement tools) plus a local `get_payroll_position` (what is owed, from BolPay records). It cannot call the Payouts API or any write tool, so it never moves money.
+- Entry points: the card on `/integrations` and `/payouts` (`POST /api/cashfree-mcp/agent`) and the voice action `check_funding` ("can I afford this month's payroll?", owner only). Without a Cashfree login it answers from BolPay records and says so.
+- Cashfree issues a token with all four scopes (read and write); the read-only guarantee comes from the tool allowlist in `agent.ts`, not from the token.
+- Unverified: the exact tool names/arguments were taken from Cashfree's docs, not from a live `tools/list`. Check them after the first login (the status route lists them).

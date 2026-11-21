@@ -11,6 +11,7 @@ import { dateRange, formatDate, formatDateTime, formatMoney } from "@/app/lib/me
 import { Card, EmptyState, Notice, PageHeader, Stat, Stats, StatusBadge, td, th, thRight } from "@/app/components/merchant/ui";
 import { signOut } from "@/app/login/actions";
 import { AdvanceCard } from "@/app/components/me/AdvanceCard";
+import { AssistantLauncher } from "@/app/components/me/AssistantLauncher";
 
 export const metadata: Metadata = { title: "My pay · BolPay" };
 
@@ -86,6 +87,8 @@ async function MyPay() {
             {pending.some((p) => p.deductions?.length) ? `, after ${formatMoney(pending.reduce((s, p) => s + ((p.grossAmount ?? p.amount) - p.amount), 0))} is deducted for an advance you took` : ""}.
           </Notice>
         )}
+
+        <AssistantLauncher workerName={worker.name} />
 
         <AdvanceCard workerName={worker.name.split(" ")[0]} />
 

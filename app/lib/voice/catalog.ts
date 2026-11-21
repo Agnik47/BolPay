@@ -11,8 +11,12 @@ export interface SlotDef {
   max?: number;
 }
 
+export type CatalogRole = "owner" | "supervisor" | "worker";
+
 export interface ActionDef {
   description: string;
+  /** Who may use the action. The executor enforces it again on every step. */
+  roles?: CatalogRole[];
   risk: Risk;
   changesPayData?: boolean;
   slots: Record<string, SlotDef>;
@@ -112,22 +116,46 @@ function slotDoc(name: string, s: SlotDef): string {
   return `${name} (${kind}${s.required ? ", required" : ", optional"})`;
 }
 
-/** The action reference that goes into the planner prompt. */
-export function renderActionDocs(): string {
+/** True when a role may plan and run this action (the catalog is the single source of that rule). */
+export function roleMayUse(role: CatalogRole, action: string): boolean {
+  return (CATALOG.actions[action]?.roles ?? ["owner", "supervisor"]).includes(role);
+}
+
+/** Query kinds a role may ask: workers only get their own, staff never get the worker-only ones. */
+export function queryKindsFor(role: CatalogRole): string[] {
+  const all = Object.keys(CATALOG.queryKinds);
+  if (role === "worker") return all.filter((k) => k === "help" || k.startsWith("my_"));
+  return all.filter((k) => !k.startsWith("my_"));
+}
+
+/** The action reference that goes into the planner prompt, limited to what this role may do. */
+export function renderActionDocs(role: CatalogRole = "owner"): string {
   return Object.entries(CATALOG.actions)
-    .map(([name, a]) => `- ${name} [${a.risk}]: ${a.description}\n    slots: ${Object.entries(a.slots).map(([k, s]) => slotDoc(k, s)).join("; ") || "none"}`)
+    .filter(([name]) => roleMayUse(role, name))
+    .map(([name, a]) => {
+      const slots = Object.entries(a.slots)
+        .map(([k, s]) => (name === "query" && k === "query" ? "query (a kind from the Query kinds list, required)" : slotDoc(k, s)))
+        .join("; ");
+      return `- ${name} [${a.risk}]: ${a.description}\n    slots: ${slots || "none"}`;
+    })
     .join("\n");
+}
+
+/** What each query kind means, for the planner (only the kinds this role may ask). */
+export function renderQueryKinds(role: CatalogRole = "owner"): string {
+  return queryKindsFor(role).map((k) => `${k}: ${CATALOG.queryKinds[k]}`).join("; ");
 }
 
 const compactArgs = (args: Record<string, unknown>) => JSON.stringify(args);
 
 /** Few-shot examples from the catalog (examples teach the format; they are not lookup tables). */
-export function renderExamples(): string {
+export function renderExamples(role: CatalogRole = "owner"): string {
   const lines: string[] = [];
-  for (const a of Object.values(CATALOG.actions)) {
+  for (const [name, a] of Object.entries(CATALOG.actions)) {
+    if (!roleMayUse(role, name)) continue;
     for (const ex of a.examples.slice(0, 1)) lines.push(`"${ex.say}" -> ${ex.steps.map((s) => `${s.action} ${compactArgs(s.args)}`).join(" | ")}`);
   }
-  for (const ex of CATALOG.flowExamples) lines.push(`"${ex.say}" -> ${ex.steps.map((s) => `${s.action} ${compactArgs(s.args)}`).join(" | ")}`);
+  if (role !== "worker") for (const ex of CATALOG.flowExamples) lines.push(`"${ex.say}" -> ${ex.steps.map((s) => `${s.action} ${compactArgs(s.args)}`).join(" | ")}`);
   return lines.join("\n");
 }
 

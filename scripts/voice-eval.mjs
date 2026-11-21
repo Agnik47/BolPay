@@ -24,7 +24,7 @@ const filter = process.argv.slice(2).join(" ").toLowerCase();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Signs in with Supabase and returns the auth cookie header the app expects. */
-async function login() {
+async function login(email = process.env.EVAL_EMAIL ?? "owner@demo.bolpay.app") {
   const { createServerClient } = createRequire(import.meta.url)("@supabase/ssr");
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -34,20 +34,23 @@ async function login() {
     cookies: { getAll: () => [...jar].map(([name, value]) => ({ name, value })), setAll: (cs) => cs.forEach((c) => jar.set(c.name, c.value)) },
   });
   const { error } = await sb.auth.signInWithPassword({
-    email: process.env.EVAL_EMAIL ?? "owner@demo.bolpay.app",
+    email,
     password: process.env.EVAL_PASSWORD ?? "BolPayDemo#2026",
   });
   if (error) throw new Error(`Eval login failed: ${error.message}`);
   return [...jar].map(([n, v]) => `${n}=${v}`).join("; ");
 }
-const cookie = await login();
+const EMAILS = { owner: process.env.EVAL_EMAIL ?? "owner@demo.bolpay.app", supervisor: "supervisor@demo.bolpay.app", worker: "ravi@demo.bolpay.app" };
+const cookies = {};
+const cookieFor = async (as = "owner") => (cookies[as] ??= await login(EMAILS[as]));
+const cookie = await cookieFor("owner");
 
-async function turn(sessionId, t) {
+async function turn(sessionId, t, ck = cookie) {
   const body = { sessionId, dryRun: true };
   if (t.say) body.text = t.say;
   if (t.action) body.action = t.action;
   const started = Date.now();
-  const res = await fetch(`${BASE}/api/voice/turn`, { method: "POST", headers: { "Content-Type": "application/json", cookie }, body: JSON.stringify(body) });
+  const res = await fetch(`${BASE}/api/voice/turn`, { method: "POST", headers: { "Content-Type": "application/json", cookie: ck }, body: JSON.stringify(body) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const view = await res.json();
   view.ms = Date.now() - started;
@@ -68,6 +71,7 @@ function check(view, e) {
   if (e.maxSteps !== undefined && actions.length > e.maxSteps) fails.push(`${actions.length} steps (max ${e.maxSteps})`);
   if (e.summaryIncludes) for (const s of e.summaryIncludes) if (!summaries.toLowerCase().includes(s.toLowerCase())) fails.push(`summary lacks "${s}": ${summaries}`);
   if (e.speechIncludes) for (const s of e.speechIncludes) if (!speech.includes(s.toLowerCase())) fails.push(`speech lacks "${s}": ${view.speech}`);
+  if (e.speechExcludes) for (const s of e.speechExcludes) if (speech.includes(s.toLowerCase())) fails.push(`speech must not include "${s}": ${view.speech}`);
   if (e.language && view.language !== e.language) fails.push(`language ${view.language} (wanted ${e.language})`);
   if (e.navigate && view.navigate !== e.navigate) fails.push(`navigate ${view.navigate} (wanted ${e.navigate})`);
   return fails;
@@ -80,9 +84,10 @@ const failures = [];
 for (const c of selected) {
   let sid = null;
   const problems = [];
+  const ck = await cookieFor(c.as);
   try {
     for (const [i, t] of c.turns.entries()) {
-      const view = await turn(sid, t.action ? { action: t.action } : t.confirm ? { action: "confirm" } : t);
+      const view = await turn(sid, t.action ? { action: t.action } : t.confirm ? { action: "confirm" } : t, ck);
       sid = view.sessionId;
       const fails = check(view, t.expect ?? {});
       if (t.expect?.fastPath === true && view.outcome === "executed") {

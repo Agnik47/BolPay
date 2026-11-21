@@ -153,14 +153,20 @@ export async function groqChat(args: {
   }
 
   if (res.status === 401 || res.status === 403) throw new IntentModelError("Groq credentials were rejected", "not_configured");
-  if (res.status === 429) throw new IntentModelError("Rate limited", "rate_limited");
+  if (res.status === 429) {
+    // The body says which limit was hit (tokens per minute, per day, requests), which a bare "busy" hides.
+    const detail = await res.text().catch(() => "");
+    console.error(`Groq rate limit (${model})`, detail.slice(0, 260));
+    throw new IntentModelError("Rate limited", "rate_limited");
+  }
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     console.error(`Groq error ${res.status}`, detail.slice(0, 300));
     throw new IntentModelError(res.status === 400 ? `Bad request (${res.status})` : "The assistant is unavailable", res.status === 400 ? "bad_output" : "upstream");
   }
 
-  const data = (await res.json().catch(() => null)) as { choices?: { message?: { content?: string }; finish_reason?: string }[] } | null;
+  const data = (await res.json().catch(() => null)) as { choices?: { message?: { content?: string }; finish_reason?: string }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } } | null;
+  if (process.env.VOICE_DEBUG === "1") console.log(`Groq ${model}: ${data?.usage?.prompt_tokens ?? "?"} prompt + ${data?.usage?.completion_tokens ?? "?"} completion tokens`);
   const choice = data?.choices?.[0];
   if (!choice?.message?.content || choice.finish_reason === "length") throw new IntentModelError("No usable answer", "bad_output");
   return choice.message.content;

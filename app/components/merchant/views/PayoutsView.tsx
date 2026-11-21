@@ -6,6 +6,7 @@ import { useStore } from "@/app/lib/merchant/store";
 import { formatDateTime, formatMoney } from "@/app/lib/merchant/format";
 import { playSound } from "@/app/lib/client/sounds";
 import { useToast } from "../../feedback/Toaster";
+import { FundingAgentCard } from "../FundingAgentCard";
 import { Avatar, Button, Card, EmptyState, linkClass, Notice, PageHeader, Stat, Stats, StatusBadge, td, th, thRight } from "../ui";
 
 export function PayoutsView() {
@@ -68,6 +69,10 @@ export function PayoutsView() {
         <Stat label="Pending amount" value={formatMoney(pending.reduce((s, p) => s + p.amount, 0))} hint="Sent in INR by UPI at approval" />
         <Stat label="Selected" value={formatMoney(chosenTotal)} hint={`${chosen.length} payout${chosen.length === 1 ? "" : "s"}`} />
       </Stats>
+
+      <div className="mb-5">
+        <FundingAgentCard />
+      </div>
 
       {review.length > 0 && (
         <Card title={`Needs review (${review.length})`} className="mb-5" flush>

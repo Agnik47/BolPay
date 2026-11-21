@@ -6,6 +6,7 @@ import { useStore, type Snapshot } from "@/app/lib/merchant/store";
 import { playSound } from "@/app/lib/client/sounds";
 import { IconClose, IconMic } from "../icons";
 import { useSpeaker } from "./useSpeaker";
+import { AssistantStage } from "../me/AssistantStage";
 import { useViewer } from "./viewer";
 
 type Phase = "idle" | "recording" | "transcribing";
@@ -143,8 +144,9 @@ export function VoiceAssistant() {
   const router = useRouter();
   const store = useStore();
   const speaker = useSpeaker();
-  const { isOwner } = useViewer();
+  const { isOwner, displayName, role } = useViewer();
   const [open, setOpen] = useState(false);
+  const [stage, setStage] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [elapsed, setElapsed] = useState(0);
@@ -367,6 +369,7 @@ export function VoiceAssistant() {
 
   return (
     <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3">
+      {stage && <AssistantStage role={role} userName={displayName} onClose={() => setStage(false)} onSnapshot={store.applySnapshot} />}
       {open && (
         <div
           role="dialog"
@@ -384,6 +387,10 @@ export function VoiceAssistant() {
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
+              <button onClick={() => { setOpen(false); setStage(true); }} className={`flex h-8 items-center gap-1.5 rounded-md bg-teal-700 px-2.5 text-xs font-medium text-white ${FOCUS}`} title="Full-screen voice mode">
+                <IconMic className="size-4" />
+                Voice mode
+              </button>
               <button onClick={() => setShowHelp((h) => !h)} aria-pressed={showHelp} className={`flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium ${FOCUS} ${showHelp ? "bg-teal-700 text-white" : "bg-slate-100 text-slate-700"}`}>
                 <IconHelp className="size-4" />
                 Help

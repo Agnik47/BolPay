@@ -3,20 +3,39 @@ import { randomUUID } from "node:crypto";
 import { IntentModelError } from "@/app/lib/ai/intent";
 import { translateReply } from "@/app/lib/ai/translate";
 import { logAudit } from "@/app/lib/server/db";
-import { describePreview, previewMoney, runPlan, type StepOutcome, type VoiceRole } from "./executor";
+import { reconcileAmount } from "@/app/lib/advance/amounts";
+import { eligibilityFor } from "@/app/lib/server/advance-service";
+import { getViewDb } from "@/app/lib/server/db";
+import { allowedFor, describePreview, previewMoney, runPlan, type StepOutcome, type VoiceCtx } from "./executor";
+import { SCOPE_REPLY } from "./knowledge";
 import { recordTurn } from "./metrics";
-import { classifyReply, fastClassify, planTurn, type PendingQuestion } from "./planner";
+import { classifyReply, fastClassify, planTurn, type PendingQuestion, type PlannerMemory } from "./planner";
 import { resolveSteps } from "./resolver";
 import type { RawStep, ResolvedStep, SessionState, StepStatus, StepView, TurnOutcome, TurnView } from "./types";
 
 const TTL_MS = 15 * 60_000;
 const PLAN_TTL_MS = 10 * 60_000;
 
+interface MemoryEntry {
+  said: string;
+  /** The planner's steps for that message, replayed to it as its own earlier answer. */
+  steps: RawStep[];
+  language: string;
+  workers: string[];
+  city: string | null;
+}
+
+const MAX_MEMORY = 4;
+
 interface Session {
   id: string;
+  /** The signed-in user the session belongs to. Another user can never read or continue it. */
+  userId?: string;
   dryRun: boolean;
-  /** Role of the signed-in caller, refreshed from the verified session on every turn. */
-  role: VoiceRole;
+  /** Who is talking: name, role and worker record, refreshed from the verified session on every turn. */
+  ctx: VoiceCtx;
+  /** The last few exchanges, so a follow-up ("only Bengaluru", "what is his salary") can be understood. */
+  history: MemoryEntry[];
   state: SessionState;
   language: string;
   /** While clarifying: the request so far and the question that was asked. */
@@ -37,16 +56,17 @@ interface Session {
 const g = globalThis as unknown as { __voiceSessions?: Map<string, Session> };
 const sessions = () => (g.__voiceSessions ??= new Map());
 
-function getSession(id: string | null | undefined, dryRun: boolean): Session {
+function getSession(id: string | null | undefined, dryRun: boolean, userId?: string): Session {
   const map = sessions();
   const now = Date.now();
   for (const [k, s] of map) if (now - s.updatedAt > TTL_MS) map.delete(k);
-  const existing = id ? map.get(id) : undefined;
+  const found = id ? map.get(id) : undefined;
+  const existing = found && (!found.userId || found.userId === userId) ? found : undefined;
   if (existing) {
     existing.updatedAt = now;
     return existing;
   }
-  const s: Session = { id: randomUUID(), dryRun, role: "supervisor", state: "idle", language: "en", cursor: 0, outcomes: {}, updatedAt: now };
+  const s: Session = { id: randomUUID(), userId, dryRun, ctx: { role: "supervisor", name: "", workerId: null }, history: [], state: "idle", language: "en", cursor: 0, outcomes: {}, updatedAt: now };
   map.set(s.id, s);
   return s;
 }
@@ -126,11 +146,11 @@ async function present(s: Session, steps: ResolvedStep[], note: string, base: { 
     s.plan = steps;
     s.cursor = 0;
     s.outcomes = {};
-    const run = await runPlan(steps, 0, s.dryRun, s.role);
+    const run = await runPlan(steps, 0, s.dryRun, s.ctx);
     s.outcomes = run.outcomes;
     s.cursor = run.cursor;
     const msgs = steps.map((_, i) => run.outcomes[i]?.message).filter(Boolean) as string[];
-    const outcome: TurnOutcome = steps.some((st) => st.action !== "query" && st.action !== "navigate") ? "executed" : "answered";
+    const outcome: TurnOutcome = steps.some((st) => !["query", "navigate", "chat", "explain"].includes(st.action)) ? "executed" : "answered";
     m(base.outcomeOverride ?? outcome);
     const view = await finish(s, { outcome: base.outcomeOverride ?? outcome, speech: `${note}${msgs.join(" ")}`, lines: msgs, awaiting: null, navigate: run.navigate });
     clearPlan(s);
@@ -180,7 +200,7 @@ async function doConfirm(s: Session, base: { llmMs: number; fastPath: boolean })
     return finish(s, { outcome: "rejected", speech: "That plan has expired. Please say it again.", lines: [], awaiting: null });
   }
 
-  const run = await runPlan(plan, s.cursor, s.dryRun, s.role);
+  const run = await runPlan(plan, s.cursor, s.dryRun, s.ctx);
   s.outcomes = { ...s.outcomes, ...run.outcomes };
 
   if (run.checkpoint) {
@@ -225,12 +245,41 @@ export interface TurnInput {
   /** Button presses: same effect as saying confirm or cancel. */
   action?: "confirm" | "cancel";
   /** From the verified session; decides which steps may run. */
-  role?: VoiceRole;
+  ctx?: VoiceCtx;
+  /** The verified user id, so a session can only be continued by the person who started it. */
+  userId?: string;
 }
 
-export function peekSession(id: string): TurnView | null {
+/** What the planner is told about the conversation so far. Only what was said and what was understood; never records or amounts. */
+function memoryOf(s: Session): PlannerMemory {
+  const workers = [...new Set([...s.history].reverse().flatMap((h) => h.workers))].slice(0, 4);
+  const city = [...s.history].reverse().find((h) => h.city)?.city;
+  const note = [
+    workers.length ? `Most recently mentioned workers: ${workers.join(", ")}. Pronouns (he, she, him, her, his, them) mean these; put their names in the selector.` : "",
+    city ? `Most recent city: ${city}.` : "",
+    s.history.length ? "A short follow-up fragment ('only Bengaluru', 'what about Anita', 'and their pay') repeats the previous action with the new target." : "",
+  ].filter(Boolean).join(" ");
+  return { note, turns: s.history.map((h) => ({ said: h.said, steps: h.steps, language: h.language })) };
+}
+
+function remember(s: Session, said: string, raw: RawStep[], steps: ResolvedStep[], language: string) {
+  const db = getViewDb();
+  // Only staff conversations remember workers; a worker is only ever talking about themselves.
+  const ids = s.ctx.role === "worker" ? [] : [...new Set(steps.flatMap((st) => (Array.isArray(st.args.workerIds) ? (st.args.workerIds as string[]) : [])))];
+  const workers = ids.length > 0 && ids.length <= 3 ? ids.map((id) => db.workers.find((w) => w.id === id)?.name).filter((n): n is string => !!n) : [];
+  const city = raw.map((r) => (r.args?.workers as { city?: string | null } | null | undefined)?.city).find((c) => typeof c === "string") ?? null;
+  // A request to send money is never replayed as history: a follow-up must not be able to inherit it.
+  const safe = raw.filter((r) => r.action !== "approve_payouts" && r.action !== "retry_failed" && r.action !== "request_advance");
+  s.history.push({ said: said.replace(/["\n]/g, " ").slice(0, 160), steps: safe, language, workers, city });
+  if (s.history.length > MAX_MEMORY) s.history.shift();
+}
+
+const REASON_LABEL: Record<string, string> = { vehicle_repair: "Bike or vehicle repair", medical: "A medical expense", family_event: "A family event", housing: "Housing", education: "Education", other: "An urgent need" };
+
+export function peekSession(id: string, userId?: string): TurnView | null {
   const s = sessions().get(id);
   if (!s || Date.now() - s.updatedAt > TTL_MS) return null;
+  if (s.userId && s.userId !== userId) return null;
   return s.last ?? null;
 }
 
@@ -239,17 +288,17 @@ export async function handleTurn(input: TurnInput): Promise<TurnView> {
     return await handleTurnInner(input);
   } catch (err) {
     console.error("voice turn crashed", err);
-    const s = getSession(input.sessionId, input.dryRun === true);
+    const s = getSession(input.sessionId, input.dryRun === true, input.userId);
     const detail = process.env.NODE_ENV !== "production" && err instanceof Error ? ` (${err.message})` : "";
     return finish(s, { outcome: "error", speech: "Something went wrong on my side. Nothing was changed.", lines: [`Something went wrong${detail}`], awaiting: s.state === "confirming" ? "confirm" : s.state === "clarifying" ? "reply" : null });
   }
 }
 
 async function handleTurnInner(input: TurnInput): Promise<TurnView> {
-  if (input.reset && input.sessionId) sessions().delete(input.sessionId);
-  const s = getSession(input.reset ? null : input.sessionId, input.dryRun === true);
+  if (input.reset && input.sessionId) { const old = sessions().get(input.sessionId); if (!old?.userId || old.userId === input.userId) sessions().delete(input.sessionId); }
+  const s = getSession(input.reset ? null : input.sessionId, input.dryRun === true, input.userId);
   if (input.dryRun !== undefined && !input.sessionId) s.dryRun = input.dryRun === true;
-  s.role = input.role ?? "supervisor";
+  s.ctx = input.ctx ?? { role: "supervisor", name: "", workerId: null };
   if (input.reset) return finish(s, { outcome: "cancelled", speech: "Okay, starting fresh.", lines: [], awaiting: null });
 
   if (input.action === "confirm") return doConfirm(s, { llmMs: 0, fastPath: true });
@@ -281,7 +330,7 @@ async function handleTurnInner(input: TurnInput): Promise<TurnView> {
     }
 
     const pending: PendingQuestion | null = fromPlan ?? (s.state === "clarifying" && s.partial && s.question && s.utterance ? { utterance: s.utterance, steps: s.partial, question: s.question } : null);
-    const plan = await planTurn(text, pending);
+    const plan = await planTurn(text, pending, s.ctx, memoryOf(s));
     llmMs += plan.latencyMs;
     llmCalls += plan.calls;
     s.language = plan.language;
@@ -303,7 +352,20 @@ async function handleTurnInner(input: TurnInput): Promise<TurnView> {
     if (plan.steps.length === 0) {
       clearPending(s);
       record(superseded ? "superseded" : "rejected", 0);
-      return finish(s, { outcome: superseded ? "superseded" : "rejected", speech: `${note}${plan.notUnderstood ? `I can't do that: ${plan.notUnderstood} Ask me what I can do to see what's possible.` : "Sorry, I didn't understand. You can say things like mark Ravi present, prepare payouts, or approve Anita's payout. Ask me what I can do for more."}`, lines: [], awaiting: null });
+      const why = plan.notUnderstood ?? "";
+      const worker = s.ctx.role === "worker";
+      const speech = /off.?topic/i.test(why)
+        ? SCOPE_REPLY
+        : /not.?allowed/i.test(why)
+          ? worker
+            ? "That's not something I can do for you; your employer handles it. I can tell you about your own pay and advances."
+            : "I can't do that."
+          : why
+            ? `I can't do that: ${why} Ask me what I can do to see what's possible.`
+            : worker
+              ? "Sorry, I didn't understand. You can ask how much you've earned, check your advance, or ask for one."
+              : "Sorry, I didn't understand. You can say things like mark Ravi present, prepare payouts, or approve Anita's payout. Ask me what I can do for more.";
+      return finish(s, { outcome: superseded ? "superseded" : "rejected", speech: `${note}${speech}`, lines: [], awaiting: null });
     }
 
     const resolution = resolveSteps(plan.steps);
@@ -321,6 +383,42 @@ async function handleTurnInner(input: TurnInput): Promise<TurnView> {
       record(superseded ? "superseded" : "rejected");
       return finish(s, { outcome: superseded ? "superseded" : "rejected", speech: `${note}${resolution.reason}`, lines: [], awaiting: null });
     }
+    // A worker's plan may only contain what the catalog gives workers; the executor checks again on every step.
+    if (s.ctx.role === "worker" && resolution.steps.some((st) => !allowedFor("worker", st))) {
+      clearPending(s);
+      record(superseded ? "superseded" : "rejected");
+      return finish(s, { outcome: superseded ? "superseded" : "rejected", speech: `${note}That's not something I can do for you; your employer handles it. I can tell you about your own pay and advances.`, lines: [], awaiting: null });
+    }
+
+    // An advance request: check what was actually said, check eligibility now, and attach what the service needs.
+    const adv = resolution.steps.find((st) => st.action === "request_advance");
+    if (adv) {
+      const amount = Number(adv.args.amount);
+      const said = reconcileAmount(amount, text, true);
+      if (said.mismatch || said.amount !== amount) {
+        s.state = "clarifying";
+        s.utterance = text;
+        s.partial = plan.steps.map((st) => (st.action === "request_advance" ? { ...st, args: { ...st.args, amount: null } } : st));
+        const q = "I wasn't sure of the amount. How many rupees do you need?";
+        s.question = await localize(q, s.language);
+        record("clarified");
+        return finish(s, { outcome: "clarified", speech: `${note}${q}`, lines: [s.question], awaiting: "reply" });
+      }
+      const e = s.ctx.workerId ? eligibilityFor(s.ctx.workerId, { amount }) : null;
+      if (!e || e.blocks.length) {
+        clearPending(s);
+        record("rejected");
+        return finish(s, { outcome: "rejected", speech: `${note}I can't send that request: ${e?.blocks[0] ?? "your login isn't linked to a worker profile."}`, lines: e?.blocks ?? [], awaiting: null });
+      }
+      const reason = String(adv.args.reason ?? "other");
+      adv.args.requestKey = randomUUID().replace(/-/g, "");
+      adv.args.transcript = text;
+      adv.args.language = plan.language;
+      adv.args.reasonText = REASON_LABEL[reason] ?? REASON_LABEL.other;
+      adv.summary = `${adv.summary}. It is deducted from your next payroll, and nothing is paid until your employer approves it`;
+    }
+    remember(s, text, plan.steps, resolution.steps, plan.language);
+
     const view = await present(s, resolution.steps, note, { llmMs, llmCalls, fastPath: false, outcomeOverride: superseded ? "superseded" : undefined, model: plan.model });
     if (s.state === "confirming") {
       s.utterance = continuing && pending ? pending.utterance : text;

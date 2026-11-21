@@ -1,4 +1,5 @@
 import "server-only";
+import { toAsciiDigits } from "@/app/lib/advance/amounts";
 import { groqChat, IntentModelError } from "./intent";
 
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -28,8 +29,8 @@ export async function translateReply(text: string, languageCode: string): Promis
       })
     ).trim();
     if (!out || out.length > 600) return null;
-    // Guard: the same digits must appear in the same order.
-    const digits = (s: string) => (s.match(/\d+/g) ?? []).join(",");
+    // Guard: the same numbers must appear in the same order. Bengali and Devanagari numerals count as the same digits.
+    const digits = (s: string) => (toAsciiDigits(s).replace(/(?<=\d),(?=\d)/g, "").match(/\d+/g) ?? []).join(",");
     return digits(out) === digits(text) ? out : null;
   } catch (err) {
     if (!(err instanceof IntentModelError)) console.error("Translation failed", err);
