@@ -1,0 +1,76 @@
+{
+  "model": "bulbul:v3",
+  "note": "Narrator clips N1..N10 are the voice-over. Manager clips M1..M4 are the spoken voice commands. Any square-bracket tags are delivery directions written for the previous voice model; Sarvam AI may read them aloud, so delete them if you hear one. Text updated for the Cashfree flow; re-measure every clip after generating.",
+  "narrator": [
+    {
+      "id": "N1",
+      "text": "Every pay cycle, a manager somewhere is stitching together attendance, deliveries, bonuses and bank details from spreadsheets and chat threads. It takes hours... and one wrong cell means someone gets paid wrong."
+    },
+    {
+      "id": "N2",
+      "text": "This is BolPay. Speak. Approve. Pay. You say what you need, a rules engine does the maths, a human approves, and Cashfree sends the money straight to the worker's UPI."
+    },
+    {
+      "id": "N3",
+      "text": "And you don't start from scratch. This is a real Zoho People account. One click, and every employee, and this month's attendance, flow into BolPay. No retyping. Pay settings stay in BolPay, so a re-sync never overwrites a wage."
+    },
+    {
+      "id": "N3b",
+      "text": "Attendance comes across too, ready to review in a grid."
+    },
+    {
+      "id": "N4",
+      "text": "Now the good part. The manager just talks, in one breath, and BolPay turns it into a plan."
+    },
+    {
+      "id": "N5",
+      "text": "Three steps, in order. Nothing has moved yet."
+    },
+    {
+      "id": "N6",
+      "text": "Before a single rupee moves, it shows the exact number of payments and the exact total. Only a second confirm sends it."
+    },
+    {
+      "id": "N7",
+      "text": "Nothing is paid blindly. Riders with missing or conflicting records land in Needs Review, and can't be approved until someone fixes them. Owners approve. Supervisors record attendance. Workers see only their own pay."
+    },
+    {
+      "id": "N8a",
+      "text": "Now the owner approves one payout, after seeing exactly how it was calculated."
+    },
+    {
+      "id": "N8",
+      "text": "And this is real. Live UPI payouts through Cashfree, moving from processing to completed. Here they are in the Cashfree dashboard."
+    },
+    {
+      "id": "N8b",
+      "text": "Each transfer has its own ID, so a retry can never pay twice."
+    },
+    {
+      "id": "N9",
+      "text": "If a payment can't go through, say a worker has no UPI ID on file, BolPay says so plainly, and one click retries it once it's fixed."
+    },
+    {
+      "id": "N10",
+      "text": "Voice first. Rules you can trust. A human on every payment. Real UPI payouts. And a way in from the HR tools businesses already use. BolPay. Speak. Approve. Pay."
+    }
+  ],
+  "manager": [
+    {
+      "id": "M1",
+      "text": "Mark Anita Sharma absent today, then prepare payouts for Ravi Kumar and Mohammed Ali, then approve everything that's pending."
+    },
+    {
+      "id": "M2",
+      "text": "Confirm."
+    },
+    {
+      "id": "M3",
+      "text": "Yes, go ahead."
+    },
+    {
+      "id": "M4",
+      "text": "Prepare payouts for everyone."
+    }
+  ]
+}

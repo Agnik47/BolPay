@@ -1,0 +1,232 @@
+# What is remaining
+
+Updated 2026-11-07. **Status updates: 2026-11-11, 2026-11-12 and 2026-11-20** (see the list just below). **2026-11-20: payments moved from PayPal to Cashfree Payouts (UPI, INR) and speech moved from ElevenLabs to Sarvam AI. Rows below that still mention the old provider have been rewritten; the code now has no PayPal.**
+
+**Done on 2026-11-12 (second update):**
+- (Superseded by the Cashfree migration: UPI has no unclaimed state, cancel-and-refund or sandbox-account tooling.) Screens refresh after a Zoho sync.
+
+**Done on 2026-11-12:**
+- **Z-00** Zoho People import built (OAuth connect, employees, attendance, repeatable sync) with a separate Zoho dataset and a dataset switch; see section 3 (Z) below for what is still open.
+- Needs Review no longer counts weekends for Zoho employees.
+
+**Done on 2026-11-11:**
+- **A-01** Login with Supabase Auth (owner, supervisor, worker demo logins); every `/api/*` route needs a session (401 otherwise); the webhook stays open and signature-verified.
+- **A-02** Role guard: approve/reject, retry, sync, import, workers, rules and voice metrics are owner-only (403). The voice assistant refuses owner-only steps for supervisors.
+- **D-07** Worker self-service page `/me` (own attendance, earnings, payment history).
+- **U-01 / T-01** PayCrew renamed to BolPay everywhere, including the payout batch prefix (transfer ids now start with `bp_`).
+- **S-01** MIT LICENSE added (change it if the team prefers Apache-2.0).
+- **B-01** Decision: app data stays in the JSON file for the hackathon (Option A); Supabase holds logins and roles. A relational Supabase schema with row-level security exists in `supabase/migrations/` for a later move.
+- **T-07 / T-08** `next build` and lint pass.
+- Voice eval: 40/40 (Hindi-script commands are now tagged `hi` from the script, not only the model).
+ Compares the code ([BUILT.md](./BUILT.md)) with the [PRD](./PRD.md) and the event requirements.
+**Deadline: 13 Nov 2026, 1:30 AM IST** (12 Nov, 12:00 PM Pacific). Plan to submit by the evening of 12 Nov IST.
+
+Priority: **P0** = required to submit or to run the demo, **P1** = should have for a credible product, **P2** = nice to have.
+Size: **S** under 1 hour, **M** a few hours, **L** a day or more. Owners follow the PRD team roles: Frontend, Backend, AI, Payments, Integration (QA, demo, slides).
+
+## 1. PRD coverage at a glance
+
+| PRD § | Requirement | Status | To-dos |
+|---|---|---|---|
+| 5.1 | Authentication, roles, business scoping | **Done** (Supabase Auth, 3 roles); business scoping open | A-03 |
+| 5.2 | Workforce management (add, view, history, payment account) | Mostly done | U-04, U-05, D-05 |
+| 5.3 | Voice interface (Scribe, languages, clarify, TTS) | Done for English, Hindi, Hinglish; browser mic untested | V-01 to V-10 |
+| 5.4 | AI intent processing, validation, no LLM money | **Done**, 40 of 40 eval fixtures | V-11, V-12 |
+| 5.5 | Incentive engine (tiers, versions, Needs Review, ₹) | Done with simplifications | D-01 to D-06 |
+| 5.6 | Payout batch and approval | Done; batch-level view missing | U-02, D-03 |
+| 5.7 | Cashfree payouts, statuses, webhooks, reconciliation | Payouts **verified on the Cashfree sandbox** (approve, send, sync, completed, retry); **webhooks, Cashfree-side failures and reconciliation not yet** | P-01 (webhook half) to P-11 |
+| 5.8 | Voice payout status updates | **Done** | V-06 |
+| 6 | End-to-end flow | Works locally, not yet rehearsed from a clean clone | S-06, G-02 |
+| 8 | Architecture (Express + Postgres + Prisma) | **Differs**: Next.js route handlers + JSON file | B-01 |
+| 9 | MVP must-haves | All present | none |
+| 10 | Security and reliability | Partial | A-01 to A-08 |
+| 11 | Success metrics | Demonstrable | G-02 |
+| 16 (new) | HRMS migration: import employees and attendance from Zoho People | **Built**, verified against a stand-in; **live run pending** | Z-01 to Z-14 |
+
+## 2. Critical path to submission (suggested order)
+
+| When (IST) | Do | IDs |
+|---|---|---|
+| Today, Nov 7 | Rotate exposed keys, pick a LICENSE, decide the database, branding rename | A-00, S-01, B-01, T-01 |
+| Nov 8 | Demo authentication, role guard on money endpoints, webhook + public URL, microphone test on real hardware | A-01, A-02, P-01, V-01 |
+| Nov 9 | Hosted demo (if Postgres chosen) or tunnel plan, payment reconciliation, audit log screen | B-01, P-04, U-06 |
+| Nov 10 | Unit tests and CI, remaining language tests, polish and empty/error states | Q-01 to Q-04, V-02, U-08 |
+| Nov 11 | Demo script rehearsal, record the video, slides, submission write-up | S-04, S-05, G-01 to G-04 |
+| Nov 12 | Final run from a clean clone, make repo public, submit with margin (not at the last minute) | S-06, S-07, S-08 |
+
+## 3. Backlog
+
+### S. Submission and hackathon (all mandatory unless marked)
+| ID | Pri | Size | Owner | Task and acceptance |
+|---|---|---|---|---|
+| S-01 | P0 | S | Integration | **LICENSE file** in the repo root (team picks MIT or Apache-2.0); it must show in GitHub's About section. |
+| S-02 | P0 | S | Integration | **Make the repo public** and confirm it contains all source and assets and no secrets (`git log -p` search for keys; `.env` is ignored). |
+| S-03 | P0 | S | Integration | **README for judges:** a clean clone runs after `npm install`, `.env`, `npm run dev`. The README has the Cashfree sandbox setup; add a "demo mode" note. Test on a second machine. |
+| S-04 | P0 | M | You | **Demo video:** script, timed shot list and steps are in [DEMO_VIDEO.md](./DEMO_VIDEO.md) (written for the old payment screens; re-time after recording the Cashfree flow). Record it, generate the narration with Sarvam AI, edit, upload. Requirement: under 3 minutes, on YouTube, public. Show the voice → plan → approve → Cashfree UPI payout → status flow. No copyrighted music or third-party trademarks (check logos of Cashfree, Sarvam AI, Groq on screen; use names only as text if unsure). |
+| S-05 | P0 | M | Integration | **Submission text description:** features, the problem, who it is for, how AI and Cashfree are used, what was built during the hackathon vs before (the repo has earlier history; explain significant changes). |
+| S-06 | P0 | S | Integration | **Functional demo requirement:** either a hosted URL or exact run instructions. Judges must be able to run it; put seeded data and sandbox credentials guidance in the README. |
+| S-07 | P0 | S | Integration | **Tools list:** Sarvam AI speech to text and TTS, Groq `gpt-oss-120b` and `gpt-oss-20b`, Cashfree Payouts V2 REST API, Next.js, Tailwind. State how each is used (README has a draft). |
+| S-08 | P0 | S | Integration | Submit on the event platform with margin; re-read the official Rules page (never read directly, only the overview) for anything extra. |
+| S-09b | P1 | S | You | **Vercel preview:** follow [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md) (needs your Vercel login; `DATA_DIR=/tmp/bolpay-data`). Best effort only: `/tmp` data resets on cold starts and differs per instance. |
+| S-09 | P1 | M | Integration | **Hosted demo on Render** (also the Render prize): needs B-01 (Postgres) or a persistent disk. Add `render.yaml`. |
+| S-10 | P1 | S | Backend | **Postman collection** for the API and webhook flow (Postman prize area); export to `docs/postman/`. |
+| S-11 | P2 | M | Backend | **OpenAPI spec** for `/api/*` (APIMatic prize area; also helps judges). |
+| S-12 | P2 | M | Frontend | **AG Grid:** done for the attendance history; workers and transactions still use plain tables (three AG Grid prize slots). |
+| S-13 | P2 | S | Integration | Pitch angles for the special awards: "Best Use of Agentic Commerce" (voice agent plans, human approves, Cashfree pays) and "Most Impactful" (workers get paid correctly and fast, straight to their UPI). |
+
+### A. Authentication, authorization, security
+| ID | Pri | Size | Owner | Task and acceptance |
+|---|---|---|---|---|
+| A-00 | **P0** | S | You | **Rotate secrets that appeared in the chat:** the Groq API key and any Cashfree Payouts secret or Sarvam AI key that was shared. Update `.env`. |
+| A-01 | P0 | M | Backend | **Demo login** (manager, admin) with a signed session cookie; every `/api/*` route except webhook and health needs it. Acceptance: unauthenticated requests get 401. |
+| A-02 | P0 | S | Backend | **Role guard on money endpoints:** approve, reject, retry, sync, import, and the voice turn when it contains a money step. Only the admin role approves; managers can prepare. |
+| A-03 | P1 | M | Backend | **Business scoping:** a `businessId` on workers, payouts, transactions; all queries filtered by the session's business. |
+| A-04 | P1 | S | Backend | Rate limit `/api/voice/*`, `/api/voice-input`, `/api/voice-output`, `/api/import` (cost and abuse protection for paid APIs). |
+| A-05 | P1 | S | Backend | Validate and cap request bodies everywhere (voice routes already do; check `/api/workers`, `/api/attendance`, `/api/rules`). |
+| A-06 | P1 | S | Backend | Security headers in `next.config.ts` (CSP, X-Frame-Options, Referrer-Policy). |
+| A-07 | P1 | S | Backend | Confirm no recipient emails or phone numbers reach the LLM or spoken replies (the planner prompt already excludes them; add a test). |
+| A-08 | P2 | M | Backend | Audit log must record the **actor** (user) once auth exists; make entries append-only. |
+| A-09 | P2 | S | Backend | Production guard: refuse to start with `CASHFREE_ENVIRONMENT=production` unless `ALLOW_LIVE_PAYOUTS` is explicitly set (the payout path already blocks; the startup check makes it visible). |
+
+### P. Payments and Cashfree
+| ID | Pri | Size | Owner | Task and acceptance |
+|---|---|---|---|---|
+| P-01 | P0 | M | Payments | **Sandbox end to end: DONE 2026-11-20** (payout to `success@upi` approved in the app reached `completed` with a UTR via sync). **Webhooks still open:** public HTTPS URL (ngrok or Render), register `/api/webhooks/cashfree` in the dashboard, send a payout, and observe `TRANSFER_SUCCESS` update the transaction without clicking sync. |
+| P-02 | P0 | S | Payments | **Invalid-signature test:** a forged POST to `/api/webhooks/cashfree` returns 400 and changes nothing. |
+| P-03 | P0 | S | Payments | **Failure and pending scenarios:** use `failure@upi` and the `testinsufficientfunds@gocash` / `testtimeoutbank@gocash` style test VPAs from Cashfree's docs, and an empty-balance run. Confirm the statuses and messages shown (failed, pending, successful). |
+| P-04 | P1 | M | Backend | **Reconciliation:** a screen or action comparing internal transactions with Cashfree transfers (and settlement reports); flag mismatches (status, amount, missing transfer). |
+| P-05 | P1 | S | Backend | Map Cashfree's finer statuses (`PENDING`, `APPROVAL_PENDING`, `REVERSED`, `REJECTED`) to distinct, explained states (today everything unsettled shows as processing). |
+| P-06 | P1 | S | Backend | Handle `TRANSFER_REVERSED` and insufficient-balance errors with a clear message. |
+| P-07 | P1 | S | Backend | Show the Cashfree transfer id and UTR on the transaction (the UTR is stored; surface it consistently). |
+| P-08 | P1 | S | Payments | Duplicate-payout test: approve the same payout from two tabs; exactly one Cashfree transfer is created (same `transfer_id`). |
+| P-09 | P2 | S | Backend | UPI limits: Cashfree's docs give ₹10,000 to ₹1 lakh per UPI transfer depending on the bank. Decide whether to split large payouts or fall back to IMPS/NEFT. |
+| P-10 | P2 | M | Backend | Optional: Cashfree Payment Gateway (collect money) for merchant top-ups of the payout balance, using the Cashfree MCP for orders and settlements. Not started. |
+| P-11 | P2 | S | Payments | Send a non-transfer webhook event with a valid signature to confirm it is ignored safely. |
+
+### V. Voice and AI
+| ID | Pri | Size | Owner | Task and acceptance |
+|---|---|---|---|---|
+| V-01 | P0 | S | AI | **Real microphone test** in Chrome on the demo machine: tap, speak, tap; transcript, plan, spoken confirm, checkpoint, payout. Record issues. (Only typed commands and generated audio were tested.) |
+| V-02 | P1 | M | AI | **Kannada, Tamil, Bengali tests:** generate speech, run through Sarvam AI speech-to-text and the planner; add fixtures; check reply translation and TTS quality (Sarvam AI's Indian-language models should help here). |
+| V-03 | P1 | S | AI | **Code-mixed speech** samples (Hinglish done; add Kanglish, Tanglish) to the eval. |
+| V-04 | P1 | M | AI | **Speech-to-text robustness:** names mis-transcribed ("Ravikumar", "Anita Sharma" as "Anita Sharma ji"). Add phonetic or fuzzy name matching in `matchWorker`, with a confirm when confidence is low. |
+| V-05 | P1 | S | AI | Pass the spoken language to Scribe when known (it auto-detects today) and keep the language for the TTS voice choice. |
+| V-06 | P1 | S | AI | Never speak UPI IDs or account details; add an eval fixture for "what is Ravi's UPI ID" (should refuse or give a masked answer). |
+| V-07 | P1 | M | AI | **Same-sentence dependencies:** allow a step to refer to a worker created earlier in the same flow (add rider, then mark him present), by re-resolving at execution time. |
+| V-08 | P1 | M | AI | **Groq limits:** handle the 8,000 tokens per minute cap more gracefully (queue and retry with a spoken "one moment", cache plans for repeated queries) or move to a paid key; keep the failover. |
+| V-09 | P2 | M | AI | **Hands-free mode** (auto-listen after a spoken question) with echo protection and silence detection, behind a toggle. Needs real-device testing. |
+| V-10 | P2 | S | AI | **Per-step results spoken:** for long flows, speak a short summary and show the detail on screen (cap is 400 characters per TTS call). |
+| V-11 | P2 | S | AI | Persist voice sessions and metrics (today in memory: lost on restart, not shared across instances). |
+| V-12 | P2 | M | AI | More actions: reopen or resubmit a rejected payout by name, list audit entries, export a report, set the pay period, undo the last attendance change. |
+| V-13 | P2 | S | AI | Prompt regression guard: run `npm run test:voice` in CI against a mock model, or record and replay model outputs. |
+
+### D. Data, rules engine, workforce
+| ID | Pri | Size | Owner | Task and acceptance |
+|---|---|---|---|---|
+| D-01 | P1 | L | Backend | **Daily incentive batches:** a batch that pays only a day's tier bonus (PRD example "₹100 for riders with at least 20 deliveries today"). Today the filter selects riders, who then receive the full period amount. |
+| D-02 | P1 | M | Backend | **Separate delivery records** (order id, timestamp, city) feeding units per day, instead of one number on the attendance row; support conflicting duplicates. |
+| D-03 | P1 | M | Backend | **Status model:** add Draft and a separate Approved step (payout approved, then submitted); batch entity grouping payouts, with a batch screen (total, count, flagged workers, rule version). |
+| D-04 | P1 | S | Backend | **Needs Review actions:** "mark reviewed, approve anyway" with a reason (audited), plus "fix attendance" deep link. |
+| D-05 | P1 | M | Backend | **Rule history:** store every rules version (not only per-payout snapshots), a screen to view and compare versions. |
+| D-06 | P1 | S | Backend | **Pay periods:** `TODAY` and the period are constants (`2026-11-03`). Add period selection and close, or read the real date with a demo override. |
+| D-07 | P2 | S | Backend | Worker payout history screen and a worker payout statement (PRD §4 worker persona, §9 nice-to-have). |
+| D-08 | P2 | M | Backend | Additional rule types (per-city multipliers, weekly bonuses, penalties) and rule effective dates. |
+| D-09 | P2 | S | Backend | Timezone handling for dates (IST vs UTC) in `formatDate` and attendance. |
+
+### U. Frontend and UX
+| ID | Pri | Size | Owner | Task and acceptance |
+|---|---|---|---|---|
+| U-01 | P0 | S | Frontend | **Branding:** the UI, page titles and transfer-id prefix still say "PayCrew" in places. Rename to BolPay with tagline "Speak. Approve. Pay.", favicon and logo. |
+| U-02 | P1 | M | Frontend | Batch review screen: totals, flagged workers, rule version, in one view (PRD §5.6). |
+| U-03 | P1 | S | Frontend | Loading, empty and error states on every screen; global error boundary; a visible banner when the server or model is unavailable. |
+| U-04 | P1 | S | Frontend | Worker detail page: attendance history, payout history, payment account status (masked email). |
+| U-05 | P1 | S | Frontend | Edit worker city, role, phone and UPI ID inline (only wage is inline today). |
+| U-06 | P1 | S | Frontend | **Audit log screen** with filters and CSV download (entries are stored, never shown). |
+| U-07 | P1 | M | Frontend | Responsive layout check for mobile (managers use phones); the voice panel on small screens. |
+| U-08 | P1 | S | Frontend | Accessibility pass: focus order, labels, contrast, keyboard use of the voice panel; screen-reader announcements for plan changes. |
+| U-09 | P2 | M | Frontend | Dashboard analytics: payout trend, per-city totals, on-time rate (PRD §9 nice-to-have). |
+| U-10 | P2 | S | Frontend | Downloadable payout report (CSV and PDF) for a period. |
+| U-11 | P2 | M | Frontend | UI language switcher (English, Hindi, Kannada, Tamil, Bengali). |
+| U-12 | P2 | S | Frontend | Show the plan's money checkpoint as a modal with big amounts, for the demo. |
+
+### B. Backend, persistence, infrastructure
+| ID | Pri | Size | Owner | Task and acceptance |
+|---|---|---|---|---|
+| B-01 | P0 (decision) | L | Backend | **Database decision.** Option A: keep the JSON file, state the limitation, demo locally, record the video. Option B: Postgres + Prisma behind the existing service layer (enables Render hosting and the Render prize). The service API already isolates storage, so only `db.ts` and the service functions change. |
+| B-02 | P1 | M | Backend | If Postgres: Prisma schema (merchants, workers, attendance, deliveries, rule versions, payout batches, payouts, transactions, audit), migrations, seed script. |
+| B-03 | P1 | S | Backend | Concurrency: the JSON store has no locking. At minimum serialise writes in one process; document the single-instance limit. |
+| B-04 | P1 | S | Backend | Health endpoint and structured logging (request id, no secrets). |
+| B-05 | P2 | S | Backend | Backup and restore for the JSON file (`.data_backup/` appeared untracked at one point; ignore it in `.gitignore`). |
+| B-06 | P2 | M | Backend | Background sync job so processing payments settle without a browser open. |
+
+### Q. Quality and testing
+| ID | Pri | Size | Owner | Task and acceptance |
+|---|---|---|---|---|
+| Q-01 | P1 | M | Backend | **Unit tests** (Vitest or node:test) for `calculatePay` (tiers, overtime, bonus, rounding), `reviewReasons`, `submitPeriod` filters and resubmit, `previewMoney`, CSV parser, selectors. |
+| Q-02 | P1 | S | Backend | **CI** (GitHub Actions): install, `tsc --noEmit`, lint, unit tests on each push. |
+| Q-03 | P1 | M | Integration | **End-to-end browser test** (Playwright) for approve and sync with the Cashfree sandbox, and for the voice panel with typed commands. |
+| Q-04 | P1 | S | Integration | Run the full manual script in [VOICE.md](./VOICE.md) and [DEMO.md](./DEMO.md) and tick every box. |
+| Q-05 | P2 | S | AI | Extend `test:voice` fixtures (Kannada, Tamil, Bengali, more injections, money flows with real checkpoints against a seeded state). |
+| Q-06 | P2 | S | Integration | Load check: 25 riders × 14 days is small; test 500 workers for the import and the tables. |
+
+### G. Documentation and presentation
+| ID | Pri | Size | Owner | Task and acceptance |
+|---|---|---|---|---|
+| G-01 | P0 | M | Integration | **Demo script and fallback recording** (rehearse twice; keep a pre-recorded run in case of network failure). |
+| G-02 | P0 | M | Integration | **Slides and pitch** (PRD team role 5): problem, solution, live flow, safety model (human approval, exact amounts), market, what is next. |
+| G-03 | P1 | S | Integration | Architecture diagram image in the README (voice turn flow from [VOICE.md](./VOICE.md), payout flow). |
+| G-04 | P1 | S | Integration | Fill the gaps in the PRD (see §15 of [PRD.md](./PRD.md): extended requirements). |
+| G-05 | P2 | S | Backend | API reference generated from the OpenAPI spec (S-11). |
+| G-06 | P2 | S | Integration | A short "What we learned / limits" section for the write-up (rate limits, UPI limits, sandbox test funds and whitelisting). Material is in [BUILT.md](./BUILT.md) section 13 ("Setup lessons"): separate Payouts keys, no-KYC test environment, the IP whitelist vs signature identity check, and the sandbox service fee. |
+
+### Z. Zoho HRMS integration (new)
+| ID | Pri | Size | Owner | Task and acceptance |
+|---|---|---|---|---|
+| Z-01 | **P0** | S | You | **Run it against your live portal.** api-console.zoho.in → Server-based Applications → redirect `http://localhost:3000/api/zoho/callback` → put `ZOHO_CLIENT_ID` and `ZOHO_CLIENT_SECRET` in `.env` (see `.env.example`) → restart → Integrations → Connect Zoho → Sync now. Acceptance: your 18 employees appear under the Zoho HRMS dataset. If anything fails, the page shows Zoho's message. |
+| Z-02 | P0 | S | You | **Confirm the attendance scope.** Default is `ZOHOPEOPLE.attendance.READ`; if Zoho answers `invalid_scope`, set `ZOHO_SCOPES=ZOHOPEOPLE.forms.READ,ZOHOPEOPLE.attendance.ALL`. Employees import even if attendance is refused (a warning is shown). |
+| Z-03 | P0 | S | Integration | **Make the demo data meaningful:** your Zoho test employees have almost no attendance. Either enter check-ins or absences in Zoho, or demonstrate "mark everyone present" by voice on the Zoho dataset, then prepare, approve and pay. Give a few employees a test UPI ID (voice: "set Michael Johnson's UPI ID to success@upi") so payouts complete. |
+| Z-04 | P1 | M | Backend | **Leave data:** import approved leave from the Zoho `leave` form (or rely on the attendance report's leave statuses, which are already mapped). Verify against real leave records. |
+| Z-05 | P1 | M | Backend | **Salary:** Zoho People has none. Options: a custom field (`ZOHO_WAGE_FIELD`, already supported), the Zoho Payroll API (separate product and scopes), or a CSV of wages. Document the choice in the pitch. |
+| Z-06 | P1 | S | Backend | **Scheduled sync** (hourly) and incremental fetch using the `modifiedtime` parameter, so HR does not press a button. |
+| Z-07 | P1 | M | Backend | **Per-business connections:** tokens are one global record in `.data/integrations.json`; store them per business (Supabase) and encrypt at rest. |
+| Z-08 | Done | M | Backend | ~~**Per-user dataset switch**~~ Done: each person's Demo / Zoho choice is their own cookie, so switching never changes what others see. |
+| Z-09 | P1 | S | Backend | **Employees removed from Zoho** are not detected (only the active or exited status is). Mark workers missing from a full sync as inactive. |
+| Z-10 | P1 | S | Frontend | Show a "Zoho" badge and department on the Workers screen, and a "synced from Zoho" note on read-only fields. |
+| Z-11 | P2 | M | Backend | **Other HRMS connectors** (Keka, Darwinbox, BambooHR, greytHR) behind the same mapper and sync interface; the mapper already accepts column labels from UI exports. |
+| Z-12 | P2 | M | Backend | **File import fallback** for portals without API access: upload Zoho's Employee View and attendance report exports (`.xlsx`, `.xls`). Needs a spreadsheet parser dependency, deliberately not added for the hackathon. |
+| Z-13 | P2 | S | Backend | Shift calendar import (Zoho `Shift_CalendarView_Report`) to know each employee's weekly off days instead of assuming Saturday and Sunday. |
+| Z-15 | — | — | — | *Retired with PayPal (cancel and refund of unclaimed payments does not exist for UPI).* |
+| Z-16 | — | — | — | *Retired with PayPal (unclaimed payments).* |
+| Z-17 | P1 | S | Backend | **Collect UPI IDs:** Zoho holds no payment details, so imported employees need a UPI ID entered on Workers, by voice, or via a bulk CSV (the workers CSV import accepts `payoutUpi`). |
+| Z-18 | P2 | S | Backend | When migrating transactions to Postgres, rename `paypal_batch_id` / `paypal_item_id` to `cashfree_transfer_id` / `cashfree_cf_transfer_id` and add `utr` and `note` columns (`supabase/migrations/`, `database.types.ts`). |
+| Z-14 | P2 | S | Backend | Tests for the sync (mapper checks exist: `node scripts/zoho-mapper-check.mjs`); add a recorded-response test for `fetchEmployeeRows` and `fetchAttendance`. |
+
+### T. Cleanup and technical debt
+| ID | Pri | Size | Owner | Task and acceptance |
+|---|---|---|---|---|
+| T-01 | P0 | S | Frontend | Rename PayCrew to BolPay everywhere (see U-01), including any remaining transfer-id prefix. |
+| T-02 | P1 | S | Backend | Remove dead code: `/api/intent`, `app/lib/ai/intent.ts` (single-intent path: keep `groqChat`), `voice-commands.ts`, `intent-types.ts` pieces still used only by them. |
+| T-03 | P1 | S | Frontend | The `/checkout` page uses a placeholder `"guest"` user and is not part of the main flow; integrate (P-10) or remove. |
+| T-04 | P1 | S | Backend | Remove unused `i` and `npm` dependencies from `package.json`. |
+| T-05 | P1 | S | Backend | ~~Rename the `app/lib/elevanlabs` folder (typo)~~ Done: replaced by `app/lib/sarvam/` in the Sarvam AI swap. |
+| T-06 | P2 | S | Backend | Add `.gitattributes` (LF normalisation; git warns about CRLF on every commit), and ignore `.playwright-mcp/`, `.data_backup/`. |
+| T-07 | P2 | S | Backend | `next.config.ts`: confirm no experimental flags are needed for production; check `next build` succeeds (not run in this session). |
+| T-08 | P2 | S | Backend | **Run `next build`** and fix anything the dev server hid (the Turbopack stale-module issue only shows in dev). |
+
+## 4. Risks and open decisions
+
+| Risk or decision | Impact | Mitigation |
+|---|---|---|
+| Groq free-tier limit (8,000 tokens per minute per model) | Rapid voice turns can stall during a live demo | Failover is built; rehearse at normal pace; consider a paid key; keep a typed fallback |
+| Cashfree sandbox only; production needs KYC, a whitelisted server IP and `ALLOW_LIVE_PAYOUTS` | A demo on test funds, not real money | Say so in the pitch; production is a configuration step |
+| JSON database | Not for hosted or multi-user use | B-01 decision |
+| No auth | Anyone reaching the app can approve payouts | A-01, A-02 before any public URL |
+| Browser microphone untested | Demo-day surprise | V-01 early, on the demo machine |
+| Cashfree webhooks and Cashfree-side failures untested | Payouts are proven on the sandbox (2026-11-20), but a status pushed by webhook and a rejection from Cashfree itself are not | P-01 (webhook half), P-02, P-03 |
+| Repo is a teammate's, history predates the hackathon | the submission asks what changed since 1 Oct | S-05 |
+| Turbopack stale modules in dev | Confusing errors after edits | Restart the dev server after server-side edits; use a production build for the video |
+
+## 5. Sandbox housekeeping
+- In the Cashfree dashboard use **Test mode**, generate the Payouts API keys, and add test funds under Payouts → Balance before recording.
+- Seeded riders use `success@upi`; rider 25 deliberately has no UPI ID (failure demo); rider 24 is inactive. Use `failure@upi` to show a failure on Cashfree's side.
+- Reset the data before the video: stop the server, delete `.data`, start again.

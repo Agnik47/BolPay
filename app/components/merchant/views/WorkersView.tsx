@@ -1,0 +1,267 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useStore } from "@/app/lib/merchant/store";
+import { useViewer } from "../viewer";
+import { formatDate, formatMoney } from "@/app/lib/merchant/format";
+import type { Worker } from "@/app/lib/merchant/types";
+import { InviteLinkCard } from "../../onboarding/kit";
+import { assignTeam, createInvite, listSupervisors } from "@/app/onboarding/actions";
+import { useToast } from "../../feedback/Toaster";
+import { isTestVpa } from "@/app/lib/cashfree/test-upi";
+import { Avatar, Badge, Button, Card, EmptyState, Field, fieldClass, inputClass, Notice, PageHeader, StatusBadge, td, th, thRight } from "../ui";
+
+const EMPTY = { name: "", role: "Delivery Rider", city: "Bengaluru", phone: "", payoutUpi: "", dailyWage: "" };
+
+export function WorkersView() {
+  const { workers, addWorker, updateWorker, importCsv, applySnapshot } = useStore();
+  const { isOwner, businessName, liveCashfree } = useViewer();
+  const [failCount, setFailCount] = useState("0");
+  const [assigning, setAssigning] = useState(false);
+  const toast = useToast();
+  const [supervisors, setSupervisors] = useState<{ id: string; name: string }[]>([]);
+  const [invite, setInvite] = useState<{ path: string; name: string } | null>(null);
+  const [showSupForm, setShowSupForm] = useState(false);
+  const [supName, setSupName] = useState("");
+  const [inviting, setInviting] = useState(false);
+
+  useEffect(() => {
+    if (isOwner) void listSupervisors().then(setSupervisors);
+  }, [isOwner]);
+
+  async function makeInvite(input: { role: "supervisor" | "worker"; workerId?: string; name?: string }) {
+    setInviting(true);
+    const r = await createInvite(input);
+    setInviting(false);
+    if (!r.ok) return toast({ tone: "error", title: "Couldn't create the invite", description: r.error });
+    setInvite({ path: r.path, name: r.name });
+    setShowSupForm(false);
+    setSupName("");
+  }
+
+  // Sandbox only: workers with no UPI ID can get a Cashfree test one so payroll and advances can run end to end.
+  const noUpi = workers.filter((w) => w.status === "active" && !w.payoutUpi.trim()).length;
+  async function assignTestIds() {
+    setAssigning(true);
+    try {
+      const res = await fetch("/api/workers/test-upi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ failCount: Math.max(0, Math.floor(Number(failCount) || 0)) }) });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; state?: Parameters<typeof applySnapshot>[0]; result?: { assigned: number; failing: number } };
+      if (!res.ok) return toast({ tone: "error", title: "Couldn't assign test UPI IDs", description: data.error });
+      if (data.state) applySnapshot(data.state);
+      const r = data.result;
+      toast({ tone: "success", title: r?.assigned ? `Gave ${r.assigned} worker${r.assigned === 1 ? "" : "s"} a test UPI ID` : "Nobody needed a test UPI ID", description: r?.assigned ? `${r.assigned - r.failing} will pay out successfully${r.failing ? `, ${r.failing} will fail on purpose` : ""}. Sandbox only: no real money moves.` : undefined });
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  async function assign(w: Worker, supervisorId: string) {
+    const r = await assignTeam([w.id], supervisorId || null);
+    if (!r.ok) return toast({ tone: "error", title: "Couldn't update the team", description: r.error });
+    const d = (await fetch("/api/state").then((x) => x.json()).catch(() => null)) as { state?: Parameters<typeof applySnapshot>[0] } | null;
+    if (d?.state) applySnapshot(d.state);
+  }
+  const [city, setCity] = useState("all");
+  const workersFile = useRef<HTMLInputElement>(null);
+  const deliveriesFile = useRef<HTMLInputElement>(null);
+  const cities = [...new Set(workers.map((w) => w.city).filter(Boolean))].sort();
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(EMPTY);
+  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
+  const [wageDraft, setWageDraft] = useState("");
+
+  const wage = Number(form.dailyWage);
+  const valid = form.name.trim() && form.role.trim() && wage > 0;
+  const shown = workers.filter((w) => (city === "all" || w.city === city) && `${w.name} ${w.role} ${w.city}`.toLowerCase().includes(query.toLowerCase()));
+  const activeCount = workers.filter((w) => w.status === "active").length;
+
+  async function onFile(kind: "workers" | "deliveries", file: File | undefined) {
+    if (!file) return;
+    const res = await importCsv(kind, await file.text());
+    if (res) {
+      const title = `Imported ${res.imported} ${kind === "workers" ? "worker" : "delivery"} row${res.imported === 1 ? "" : "s"}`;
+      toast(
+        res.errors.length
+          ? { tone: "warn", title, description: `${res.errors.length} row${res.errors.length === 1 ? "" : "s"} skipped: ${res.errors.slice(0, 3).join("; ")}`, duration: 10000 }
+          : { tone: "success", title },
+      );
+    }
+    if (workersFile.current) workersFile.current.value = "";
+    if (deliveriesFile.current) deliveriesFile.current.value = "";
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!valid) return;
+    const name = form.name.trim();
+    const ok = await addWorker({ name, role: form.role.trim(), city: form.city.trim(), phone: form.phone.trim(), payoutUpi: form.payoutUpi.trim(), dailyWage: wage });
+    if (!ok) return; // the error toast comes from the store; keep the form so nothing is lost
+    toast({ tone: "success", title: `Added ${name}`, description: form.payoutUpi.trim() ? undefined : "Add a UPI ID before their first payout." });
+    setForm(EMPTY);
+    setShowForm(false);
+  }
+
+  function saveWage(w: Worker) {
+    const next = Number(wageDraft);
+    setEditing(null);
+    if (!(next > 0) || next === w.dailyWage) return;
+    updateWorker(w.id, { dailyWage: next });
+    toast({ tone: "success", title: "Daily wage updated", description: `${w.name}: ${formatMoney(w.dailyWage)} to ${formatMoney(next)}.` });
+  }
+
+  function toggleActive(w: Worker) {
+    const next = w.status === "active" ? "inactive" : "active";
+    updateWorker(w.id, { status: next });
+    toast({
+      tone: "info",
+      sound: false,
+      title: next === "inactive" ? `${w.name} deactivated` : `${w.name} reactivated`,
+      description: next === "inactive" ? "They won't appear in attendance or new payouts." : undefined,
+      action: { label: "Undo", onClick: () => updateWorker(w.id, { status: w.status }) },
+    });
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Workers"
+        description={isOwner ? `${activeCount} active of ${workers.length}. Manage wages and payout accounts.` : "Your team. Only the owner can change wages or payout accounts."}
+        actions={
+          isOwner && <>
+            <input ref={workersFile} type="file" accept=".csv,text/csv" hidden onChange={(e) => void onFile("workers", e.target.files?.[0])} />
+            <input ref={deliveriesFile} type="file" accept=".csv,text/csv" hidden onChange={(e) => void onFile("deliveries", e.target.files?.[0])} />
+            <Button onClick={() => workersFile.current?.click()} title="Columns: name, role, city, phone, payoutUpi, dailyWage">Import workers</Button>
+            <Button onClick={() => deliveriesFile.current?.click()} title="Columns: worker, date, deliveries, status, overtime">Import deliveries</Button>
+            <Button onClick={() => setShowSupForm((s) => !s)} aria-expanded={showSupForm}>Invite supervisor</Button>
+            <Button variant="primary" onClick={() => setShowForm((s) => !s)} aria-expanded={showForm}>{showForm ? "Cancel" : "Add worker"}</Button>
+          </>
+        }
+      />
+      {showSupForm && (
+        <Card title="Invite a supervisor" className="mb-5">
+          <form className="flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); void makeInvite({ role: "supervisor", name: supName }); }}>
+            <div className="w-full max-w-xs"><Field label="Their name" hint="Shown to them when they open the link."><input className={inputClass} value={supName} onChange={(e) => setSupName(e.target.value)} required minLength={2} maxLength={80} /></Field></div>
+            <Button type="submit" variant="primary" disabled={inviting || supName.trim().length < 2}>{inviting ? "Creating…" : "Create invite link"}</Button>
+            <Button variant="ghost" onClick={() => setShowSupForm(false)}>Cancel</Button>
+          </form>
+        </Card>
+      )}
+      {invite && (
+        <div className="mb-5 max-w-xl">
+          <InviteLinkCard path={invite.path} name={invite.name} businessLabel={businessName} />
+          <Button variant="ghost" size="sm" className="mt-2" onClick={() => setInvite(null)}>Done</Button>
+        </div>
+      )}
+      {showForm && (
+        <Card title="New worker" className="mb-5">
+          <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Field label="Full name"><input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
+            <Field label="Role"><input className={inputClass} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} required /></Field>
+            <Field label="City"><input className={inputClass} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
+            <Field label="Daily wage (₹)"><input className={inputClass} type="number" min="1" step="0.5" value={form.dailyWage} onChange={(e) => setForm({ ...form, dailyWage: e.target.value })} required /></Field>
+            <Field label="Phone"><input className={inputClass} type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+            <Field label="UPI ID" hint="Needed to receive payouts, like name@okicici"><input className={inputClass} type="text" placeholder="name@bank" value={form.payoutUpi} onChange={(e) => setForm({ ...form, payoutUpi: e.target.value })} /></Field>
+            <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-3">
+              <Button type="submit" variant="primary" disabled={!valid}>Save worker</Button>
+              <Button variant="ghost" onClick={() => { setForm(EMPTY); setShowForm(false); }}>Cancel</Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      {!liveCashfree && noUpi > 0 && (
+        <Notice
+          tone="info"
+          className="mb-5"
+          action={
+            <span className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-1.5 text-xs text-slate-700">Make
+                <input className={fieldClass("h-7 w-14 px-2 text-sm")} type="number" min="0" max={noUpi} value={failCount} onChange={(e) => setFailCount(e.target.value)} aria-label="How many of these workers should fail on purpose" />
+                fail
+              </label>
+              <Button size="sm" variant="primary" disabled={assigning} onClick={() => void assignTestIds()}>{assigning ? "Assigning…" : "Assign test UPI IDs"}</Button>
+            </span>
+          }
+        >
+          <span className="font-medium">Sandbox mode:</span> {noUpi} active worker{noUpi === 1 ? " has" : "s have"} no UPI ID, so they can&apos;t be paid. Cashfree&apos;s test IDs (<code>success@upi</code>, <code>failure@upi</code>) let payroll and advances run end to end with no real money.
+        </Notice>
+      )}
+
+      <Card flush>
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-2.5">
+          <select className={fieldClass("h-8 w-auto min-w-[9rem] px-2.5 text-sm")} aria-label="Filter by city" value={city} onChange={(e) => setCity(e.target.value)}>
+            <option value="all">All cities</option>
+            {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <input type="search" className={`${inputClass} max-w-xs`} placeholder="Search name, role or city" aria-label="Search workers" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <span className="ml-auto text-xs text-slate-500 tabular-nums">{shown.length} shown</span>
+        </div>
+        {shown.length === 0 ? <EmptyState>No workers match.</EmptyState> : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px]">
+              <thead>
+                <tr><th className={th}>Worker</th><th className={th}>Role</th><th className={thRight}>Daily wage</th><th className={th}>UPI ID</th><th className={th}>Joined</th>{isOwner && <th className={th}>Supervisor</th>}<th className={th}>Status</th><th className={th}><span className="sr-only">Actions</span></th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {shown.map((w) => (
+                  <tr key={w.id} className={w.status === "inactive" ? "bg-slate-50/60 [&>td:not(:last-child)]:opacity-55" : ""}>
+                    <td className={td}>
+                      <div className="flex items-center gap-2.5"><Avatar name={w.name} /><div className="min-w-0"><p className="font-medium text-slate-900">{w.name}</p><p className="text-xs text-slate-500">{w.phone}</p></div></div>
+                    </td>
+                    <td className={td}><p>{w.role}</p><p className="text-xs text-slate-500">{w.city}</p></td>
+                    <td className={`${td} text-right tabular-nums`}>
+                      {!isOwner ? formatMoney(w.dailyWage) : editing === w.id ? (
+                        <form className="flex items-center justify-end gap-1" onSubmit={(e) => {
+                          e.preventDefault();
+                          saveWage(w);
+                        }}>
+                          <input autoFocus className={fieldClass("h-7 w-20 px-2 text-right text-sm tabular-nums")} type="number" min="1" step="0.5" value={wageDraft} onChange={(e) => setWageDraft(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setEditing(null)} aria-label={`Daily wage for ${w.name}`} />
+                          <Button type="submit" variant="primary" size="sm">Save</Button>
+                        </form>
+                      ) : (
+                        <button className="-mx-1 rounded px-1 underline decoration-slate-300 decoration-dotted underline-offset-4 hover:bg-slate-100 hover:decoration-slate-500" onClick={() => { setEditing(w.id); setWageDraft(String(w.dailyWage)); }} title="Edit daily wage">
+                          {formatMoney(w.dailyWage)}
+                        </button>
+                      )}
+                    </td>
+                    <td className={`${td} max-w-[13rem] truncate`}>{w.payoutUpi ? <>{w.payoutUpi} {isTestVpa(w.payoutUpi) && <Badge tone={w.payoutUpi.toLowerCase().startsWith("failure") ? "red" : "blue"}>Test</Badge>}</> : <span className="text-xs font-medium text-rose-700">Missing</span>}</td>
+                    <td className={`${td} whitespace-nowrap`}>{formatDate(w.joinedOn)}</td>
+                    {isOwner && (
+                      <td className={td}>
+                        <select
+                          className={fieldClass("h-7 w-auto min-w-[8rem] px-2 text-xs")}
+                          aria-label={`Supervisor for ${w.name}`}
+                          value={supervisors.some((s) => s.id === w.supervisorId) ? w.supervisorId : ""}
+                          onChange={(e) => void assign(w, e.target.value)}
+                          disabled={supervisors.length === 0}
+                          title={supervisors.length === 0 ? "Invite a supervisor first" : undefined}
+                        >
+                          <option value="">Unassigned</option>
+                          {supervisors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </td>
+                    )}
+                    <td className={td}><StatusBadge status={w.status} /></td>
+                    <td className={`${td} text-right`}>
+                      {w.status === "active" && (
+                        <Button variant="ghost" size="sm" disabled={inviting} onClick={() => void makeInvite({ role: "worker", workerId: w.id })} title="Create a one-time link so this worker can sign in and see their pay">
+                          Invite
+                        </Button>
+                      )}
+                      {isOwner && (
+                        <Button variant="ghost" size="sm" onClick={() => toggleActive(w)}>
+                          {w.status === "active" ? "Deactivate" : "Reactivate"}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </>
+  );
+}
