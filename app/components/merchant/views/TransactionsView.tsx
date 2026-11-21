@@ -79,8 +79,7 @@ export function TransactionsView() {
                         {t.failureReason && <p className="mt-1 max-w-[16rem] whitespace-normal text-xs text-rose-700">{t.failureReason}</p>}
                       </td>
                       <td className={`${td} text-right`}>
-                        {t.status === "failed" && t.kind === "advance" && <span className="text-xs text-slate-500">Retry in Advances</span>}
-                        {t.status === "failed" && t.kind !== "advance" && (
+                        {t.status === "failed" && (
                           <Button size="sm" disabled={retrying === t.id} onClick={() => void retry(t.id, name)} title={w?.payoutUpi ? undefined : "Add a UPI ID on the Workers page first"}>
                             {retrying === t.id ? "Retrying…" : "Retry"}
                           </Button>
