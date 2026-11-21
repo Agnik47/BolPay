@@ -7,7 +7,7 @@ import { WorkspaceSwitch } from "./WorkspaceSwitch";
 
 type Role = "owner" | "supervisor";
 
-const OWNER_ONLY = new Set(["/incentives", "/payouts", "/transactions", "/integrations"]);
+const OWNER_ONLY = new Set(["/incentives", "/payouts", "/advances", "/transactions", "/integrations"]);
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", Icon: IconOverview },
@@ -15,7 +15,7 @@ const NAV = [
   { href: "/attendance", label: "Attendance", Icon: IconAttendance },
   { href: "/incentives", label: "Incentives", Icon: IconTiers },
   { href: "/payouts", label: "Payout approvals", Icon: IconApprove },
-  { href: "/advances", label: "Advances", Icon: IconAdvance },
+  { href: "/advances", label: "Emergency advances", Icon: IconAdvance },
   { href: "/transactions", label: "Transactions", Icon: IconLedger },
   { href: "/integrations", label: "Integrations", Icon: IconIntegrations },
   { href: "/settings", label: "Settings", Icon: IconSettings },

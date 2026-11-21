@@ -4,7 +4,7 @@ import { requireRole } from "@/app/lib/auth/dal";
 import { AdvancesView } from "@/app/components/merchant/views/AdvancesView";
 import { ContentSkeleton } from "@/app/components/Skeleton";
 
-export const metadata: Metadata = { title: "Advances · BolPay" };
+export const metadata: Metadata = { title: "Emergency advances · BolPay" };
 
 export default function Page() {
   return (
@@ -15,6 +15,6 @@ export default function Page() {
 }
 
 async function AuthedAdvances() {
-  await requireRole(["owner", "supervisor"]);
+  await requireRole(["owner"]);
   return <AdvancesView />;
 }

@@ -1,6 +1,6 @@
 import { connection, NextResponse } from "next/server";
 import { SarvamError, synthesizeSpeech, UnsupportedSpeechLanguageError } from "@/app/lib/sarvam/client";
-import { guard, STAFF } from "@/app/lib/server/http";
+import { guard, SPEAKERS } from "@/app/lib/server/http";
 
 const MAX_CHARS = 400;
 
@@ -12,7 +12,7 @@ const MAX_CHARS = 400;
  * Callers should only send reply text, never recipient details (emails, bank info).
  */
 export async function POST(req: Request) {
-  const denied = await guard(STAFF);
+  const denied = await guard(SPEAKERS);
   if (denied) return denied;
   await connection();
   if (!process.env.SARVAM_API_KEY) {

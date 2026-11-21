@@ -16,7 +16,7 @@ export const IconWorkers = (p: P) => <Icon {...p} d="M7.5 9.5a2.75 2.75 0 100-5.
 export const IconAttendance = (p: P) => <Icon {...p} d="M4.5 4.5h11a1 1 0 011 1v10a1 1 0 01-1 1h-11a1 1 0 01-1-1v-10a1 1 0 011-1zM3.5 8h13M7 2.75v3.5M13 2.75v3.5M7.5 12.25l1.75 1.75 3.25-3.5" />;
 export const IconTiers = (p: P) => <Icon {...p} d="M3 16.5h14M4.5 16.5v-4h3v4M8.5 16.5v-8h3v8M12.5 16.5v-12h3v12" />;
 export const IconApprove = (p: P) => <Icon {...p} d="M7 3.5h6v2.25H7zM13 4.5h1.5a1 1 0 011 1v10a1 1 0 01-1 1h-9a1 1 0 01-1-1v-10a1 1 0 011-1H7M7.5 11.25l1.75 1.75 3.25-3.5" />;
-export const IconAdvance = (p: P) => <Icon {...p} d="M10 17a7 7 0 100-14 7 7 0 000 14zM12.25 7.5c-.4-.6-1.2-1-2.25-1-1.25 0-2.25.65-2.25 1.6 0 2.2 4.5 1 4.5 3.2 0 .95-1 1.7-2.25 1.7-1.05 0-1.9-.4-2.4-1.1M10 5v1.5M10 13.5V15" />;
+export const IconAdvance = (p: P) => <Icon {...p} d="M10 17.25a7.25 7.25 0 100-14.5 7.25 7.25 0 000 14.5zM7.5 7h5M7.5 9.75h5M9 7c2.25 0 3.25 1 3.25 2.25S11 11.5 9 11.5H7.5L11.5 14.5" />;
 export const IconLedger = (p: P) => <Icon {...p} d="M4 7h12M13 4l3 3-3 3M16 13H4M7 10l-3 3 3 3" />;
 export const IconIntegrations = (p: P) => <Icon {...p} d="M8 6.5H6a3 3 0 000 6h2M12 6.5h2a3 3 0 010 6h-2M7.5 9.5h5" />;
 export const IconSettings = (p: P) => (

@@ -10,15 +10,13 @@ import type {
   Transaction,
   Worker,
 } from "@/app/lib/merchant/types";
+import { planRecovery } from "@/app/lib/advances/policy";
+import { addTrail, advancesOf, noteAdvancePayment, outstandingAdvances } from "@/app/lib/advances/store";
 import { createTransfer, getTransfer, transferIdFor, UPI_ID } from "@/app/lib/cashfree/payouts";
 import { CashfreeError, isLiveCashfree } from "@/app/lib/cashfree/rest";
 import { isTestVpa, planTestUpiAssignment } from "@/app/lib/cashfree/test-upi";
-import { DEFAULT_ADVANCE_POLICY } from "@/app/lib/advance/eligibility";
-import { outstandingAdvances, planRecovery, reservedByAdvance } from "@/app/lib/advance/recovery";
 import { parseCsv } from "./csv";
-import { canActOnWorker, getDb, getViewDb, listWorkspaces, logAudit, saveDb } from "./db";
-
-type DbT = ReturnType<typeof getDb>;
+import { canActOnWorker, getDb, getViewDb, listWorkspaces, logAudit, saveDb, type Db } from "./db";
 
 export class ServiceError extends Error {
   constructor(
@@ -226,56 +224,6 @@ function reviewReasons(w: Worker, records: AttendanceRecord[]): string[] {
 }
 
 /**
- * Withholds paid, unrecovered advances from one pending payout (docs/ADVANCE.md section 8). `amount` becomes the
- * net sent to Cashfree and `grossAmount` keeps the wages. Safe to call again: it recomputes from server state,
- * ignoring this payout's own earlier reservation. Nothing counts as recovered until the transfer completes.
- */
-export function applyRecovery(db: DbT, p: Payout) {
-  if (p.status !== "pending") return;
-  const gross = p.grossAmount ?? p.amount;
-  const mine = (db.advances ?? []).filter((a) => a.workerId === p.workerId);
-  const plan = planRecovery(gross, outstandingAdvances(mine, reservedByAdvance(db.payouts, p.id)), (db.advancePolicy ?? DEFAULT_ADVANCE_POLICY).maxRecoveryPercentOfPayout);
-  if (plan.deductions.length === 0 && p.grossAmount === undefined) return;
-  p.grossAmount = gross;
-  p.deductions = plan.deductions.length ? plan.deductions : undefined;
-  p.amount = plan.net;
-}
-
-/** Pending payouts of one worker pick up (or drop) a deduction when an advance is paid or taken back. */
-function refreshPendingRecovery(db: DbT, workerId: string) {
-  for (const p of db.payouts) if (p.workerId === workerId && p.status === "pending") applyRecovery(db, p);
-}
-
-/**
- * Credits a payroll payout's deductions to its advances, but only when that transfer completes, and takes them
- * back if a completed transfer is later reversed. A failed or retried transfer leaves the advances untouched.
- */
-function syncRecoveryFromTx(tx: Transaction) {
-  if (tx.kind === "advance") return;
-  for (const ws of listWorkspaces()) {
-    const db = getDb(ws);
-    const p = db.payouts.find((x) => x.id === tx.payoutId);
-    if (!p) continue;
-    if (!p.deductions?.length) return;
-    const apply = tx.status === "completed" && !p.recoveryApplied;
-    const undo = tx.status === "failed" && p.recoveryApplied;
-    if (!apply && !undo) return;
-    for (const d of p.deductions) {
-      const a = db.advances?.find((x) => x.id === d.advanceId);
-      if (!a) continue;
-      a.recovery ??= { recovered: 0 };
-      a.recovery.recovered = Math.max(0, apply ? Math.min(a.recovery.recovered + d.amount, a.approvedAmount ?? a.amount) : a.recovery.recovered - d.amount);
-      a.updatedAt = new Date().toISOString();
-    }
-    p.recoveryApplied = apply;
-    const total = p.deductions.reduce((s, d) => s + d.amount, 0);
-    logAudit(apply ? "advance.recovered" : "advance.recovery_reversed", `${p.id}: ₹${total} (${p.deductions.map((d) => d.advanceId).join(", ")})`, ws, "system");
-    saveDb(ws);
-    return;
-  }
-}
-
-/**
  * Computes the current period and queues payouts for approval. Workers with missing or
  * conflicting records become "needs_review" and can't be approved until the data is fixed
  * (then submit again: stale needs_review payouts are recomputed).
@@ -311,13 +259,17 @@ export function submitPeriod(filter: PrepareFilter = {}): { created: number; nee
     const reasons = reviewReasons(w, records);
     const breakdown = calculatePay(w, records, db.rules);
     if (breakdown.total <= 0 && reasons.length === 0) continue;
+    // Earlier emergency advances are taken back from this salary (a preview here; the final figure is set at approval).
+    const recovery = planRecovery(breakdown.total, outstandingAdvances(db, w.id));
     created.push({
       id: previousAttempts(db.payouts, w.id) === 0 ? `po-${getPeriod().id}-${w.id}` : `po-${getPeriod().id}-${w.id}-r${previousAttempts(db.payouts, w.id) + 1}`,
       workerId: w.id,
       periodId: getPeriod().id,
       periodLabel: getPeriod().label,
       breakdown,
-      amount: breakdown.total,
+      amount: Math.round((breakdown.total - recovery.total) * 100) / 100,
+      advanceDeduction: recovery.total || undefined,
+      advanceDeductions: recovery.parts.length ? recovery.parts : undefined,
       status: reasons.length ? "needs_review" : "pending",
       reviewReasons: reasons.length ? reasons : undefined,
       ruleVersion: db.rules.version,
@@ -326,7 +278,6 @@ export function submitPeriod(filter: PrepareFilter = {}): { created: number; nee
     });
   }
   db.payouts.push(...created);
-  for (const p of created) applyRecovery(db, p);
   const needsReview = created.filter((p) => p.status === "needs_review").length;
   logAudit("period.submit", `${created.length} payouts (${needsReview} need review), rules v${db.rules.version}, filter ${JSON.stringify(filter)}`);
   saveDb();
@@ -344,11 +295,20 @@ export async function decidePayouts(ids: string[], decision: "approved" | "rejec
   // second request for the same payouts finds them already decided.
   const txs: Transaction[] = [];
   for (const p of pending) {
-    // Fresh recovery plan at the moment money is committed: an advance may have been paid or repaid since submit.
-    if (decision === "approved") applyRecovery(db, p);
     p.status = decision;
     p.decidedAt = now;
     if (decision === "approved") {
+      // Advances paid since this payout was prepared are recovered too: work it out again from the live records.
+      const recovery = planRecovery(p.breakdown.total, outstandingAdvances(db, p.workerId));
+      for (const part of recovery.parts) {
+        const adv = advancesOf(db).find((a) => a.id === part.advanceId);
+        if (!adv) continue;
+        adv.recovered += part.amount;
+        addTrail(adv, "system", "Recovered from salary", `₹${part.amount} was taken back from the ${p.periodLabel} salary payout.`);
+      }
+      p.amount = Math.round((p.breakdown.total - recovery.total) * 100) / 100;
+      p.advanceDeduction = recovery.total || undefined;
+      p.advanceDeductions = recovery.parts.length ? recovery.parts : undefined;
       txs.push({
         id: `tx-${p.id}`,
         payoutId: p.id,
@@ -368,13 +328,7 @@ export async function decidePayouts(ids: string[], decision: "approved" | "rejec
   if (txs.length) await submitToCashfree(txs.map((t) => t.id));
 }
 
-/** Retry from the Transactions screen or by voice. Emergency advances have their own owner-only retry, which checks Cashfree first. */
 export async function retryTransaction(id: string) {
-  if (getDb().transactions.find((t) => t.id === id)?.kind === "advance") throw new ServiceError("Retry an emergency advance from the Advances page.", 409);
-  return resubmitFailedTransaction(id);
-}
-
-export async function resubmitFailedTransaction(id: string) {
   const db = getDb();
   const tx = db.transactions.find((t) => t.id === id);
   if (!tx) throw new ServiceError("Transaction not found", 404);
@@ -406,6 +360,7 @@ export async function resubmitFailedTransaction(id: string) {
   tx.transferId = undefined;
   tx.reference = "Submitting…";
   tx.attempt = (tx.attempt ?? 1) + 1;
+  noteAdvancePayment(db, tx); // an emergency advance records the retry in its trail
   saveDb();
   await submitToCashfree([tx.id]);
 }
@@ -415,7 +370,7 @@ function fail(tx: Transaction, reason: string) {
   tx.failureReason = reason;
   tx.uncertainSince = undefined;
   if (tx.reference === "Submitting…" || tx.reference === CHECKING) tx.reference = "—";
-  syncAdvanceFromTx(tx);
+  noteAdvancePayment(getDb(), tx);
 }
 
 const CHECKING = "Checking with Cashfree…";
@@ -439,31 +394,6 @@ async function settleUnknown(tx: Transaction) {
     tx.status = "processing";
     tx.uncertainSince ??= new Date().toISOString();
     tx.reference = CHECKING;
-  }
-}
-
-/**
- * Keeps an emergency advance in step with its Cashfree transfer, whichever path updated the transfer
- * (submit, status sync or webhook). Only a confirmed SUCCESS makes an advance "paid". A transfer that
- * later fails (for example reversed) takes a paid advance back to payment_failed, because the money didn't stay.
- */
-function syncAdvanceFromTx(tx: Transaction) {
-  if (tx.kind !== "advance" || !tx.advanceId) return;
-  for (const ws of listWorkspaces()) {
-    const a = getDb(ws).advances?.find((x) => x.id === tx.advanceId);
-    if (!a) continue;
-    if (!["paying", "payment_failed", "paid"].includes(a.status)) return;
-    const next = tx.status === "completed" ? "paid" : tx.status === "failed" ? "payment_failed" : "paying";
-    if (a.status === next) return;
-    const wasPaid = a.status === "paid";
-    a.status = next;
-    if (next === "paid") (a.recovery ??= { recovered: 0 }).paidAt ??= new Date().toISOString();
-    if (next === "paid" || wasPaid) refreshPendingRecovery(getDb(ws), a.workerId);
-    a.statusNote = next === "paid" ? undefined : next === "payment_failed" ? tx.failureReason ?? "The payment failed." : undefined;
-    a.updatedAt = new Date().toISOString();
-    logAudit(`advance.${next}`, `${a.id}: ₹${tx.amount}${tx.failureReason && next === "payment_failed" ? `, ${tx.failureReason}` : ""}`, ws, "system");
-    saveDb(ws);
-    return;
   }
 }
 
@@ -513,23 +443,10 @@ export async function submitToCashfree(txIds: string[]) {
   saveDb();
 }
 
-/** Re-checks one transfer with Cashfree, even a failed one. Used before an advance is retried, so a transfer that actually went through is never paid twice. */
-export async function refreshTransaction(id: string) {
-  const tx = getDb().transactions.find((t) => t.id === id);
-  if (!tx?.transferId) return;
-  try {
-    const r = await getTransfer(tx.transferId);
-    applyTransferResult(tx, r.status, { cfTransferId: r.cfTransferId, utr: r.utr, error: r.error });
-    saveDb();
-  } catch {
-    /* Cashfree has no such transfer (it never got there) or is unreachable: leave the transfer as it was */
-  }
-}
-
-/** Pulls live transfer statuses from Cashfree for every transaction that is still processing. */
-export async function syncTransactions() {
+/** Pulls live transfer statuses from Cashfree for every transaction that is still processing (or only those `only` accepts). */
+export async function syncTransactions(only?: (t: Transaction) => boolean) {
   const db = getDb();
-  const open = db.transactions.filter((t) => t.status === "processing" && t.transferId);
+  const open = db.transactions.filter((t) => t.status === "processing" && t.transferId && (!only || only(t)));
   for (let i = 0; i < open.length; i += SUBMIT_CONCURRENCY) {
     await Promise.all(
       open.slice(i, i + SUBMIT_CONCURRENCY).map(async (tx) => {
@@ -550,7 +467,7 @@ export async function syncTransactions() {
   saveDb();
 }
 
-function applyTransferResult(tx: Transaction, status: Transaction["status"], info: { cfTransferId?: string; utr?: string; error?: string }) {
+function applyTransferResult(tx: Transaction, status: Transaction["status"], info: { cfTransferId?: string; utr?: string; error?: string }, db: Db = getDb()) {
   if (info.cfTransferId) tx.cfTransferId = info.cfTransferId;
   const ref = info.utr || info.cfTransferId;
   if (ref) tx.reference = ref;
@@ -558,8 +475,7 @@ function applyTransferResult(tx: Transaction, status: Transaction["status"], inf
   tx.uncertainSince = undefined;
   tx.status = status;
   tx.failureReason = status === "failed" ? (info.error ?? "Payment failed") : undefined;
-  syncAdvanceFromTx(tx);
-  syncRecoveryFromTx(tx);
+  noteAdvancePayment(db, tx);
 }
 
 /**
@@ -574,7 +490,7 @@ export function applyWebhookTransfer(item: { transferId: string; status: Transac
     // A "not settled yet" event never pulls a finished payment backwards (late, out-of-order or replayed delivery).
     // Completed to failed is still allowed: that is how a reversal arrives.
     if (item.status === "processing" && tx.status !== "processing") return true;
-    applyTransferResult(tx, item.status, item);
+    applyTransferResult(tx, item.status, item, getDb(ws));
     saveDb(ws);
     return true;
   }

@@ -170,3 +170,7 @@ Lets a business that runs HR on Zoho People start paying through BolPay without 
 ## 15. State at submission
 **Working and verified:** voice-driven multi-step flows with exact-amount checkpoints (40 of 40 eval fixtures, plus real runs), Needs Review safeguards, roles and sign-in, Zoho People import against a live portal (20 employees, 150 attendance records), two datasets with per-person switching.
 **Not verified or not done:** Cashfree payouts end to end and webhooks (need the Payouts keys and a public URL), the Sarvam AI speech integration against the live API (written from the docs; the first real call should confirm the audio format and the speech-to-text behaviour), a real-microphone take (record it as part of the video), Kannada, Tamil and Bengali speech, a hosted deployment, and a production build run in this session (the team reported it passing). Open work is in [REMAINING.md](./REMAINING.md).
+
+## 16. Emergency salary advances (2026-11-21)
+
+Workers ask for an advance on earned wages in their own language; four agents (worker assistance, financial eligibility, manager with delegated approval, payout) check, approve and pay it through Cashfree, and it is recovered from the next salary. See [ADVANCES.md](./ADVANCES.md) for the rules, routes and tests (`npm run test:advances`). Owner screen: `/advances`; worker screen: the card on `/me`.

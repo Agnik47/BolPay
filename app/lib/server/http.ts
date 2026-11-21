@@ -3,10 +3,14 @@ import { cookies } from "next/headers";
 import { connection, NextResponse } from "next/server";
 import { getSession, type Role, type SessionContext } from "@/app/lib/auth/dal";
 import { parseWorkspace, runAsViewer, runInWorkspace, workspaceForBusiness, WORKSPACE_COOKIE, type Workspace } from "./db";
+import type { Worker } from "@/app/lib/merchant/types";
+import { getDb } from "./db";
 import { getSnapshot, ServiceError } from "./service";
 
 /** Owners and supervisors run the business; workers only see their own pay page. */
 export const STAFF: Role[] = ["owner", "supervisor"];
+/** Who may use speech-to-text and text-to-speech: staff for commands, workers to ask for an emergency advance. */
+export const SPEAKERS: Role[] = ["owner", "supervisor", "worker"];
 /** Anything that moves money or changes wages, rules or the team. */
 export const OWNER: Role[] = ["owner"];
 
@@ -86,34 +90,22 @@ export async function withRequestWorkspace<T>(fn: () => Promise<T>): Promise<T> 
 }
 
 /**
- * Like respond(), for worker-facing routes: the caller must be a signed-in worker linked to a worker profile,
- * the response is only what `fn` returns (never the company snapshot), and it runs in the worker's own business's
- * dataset (the demo business's workers use the demo data, since worker sessions don't carry a dataset choice).
- * `fn` receives the worker id from the verified session.
+ * For routes a worker calls about themselves. It never returns the business snapshot (that holds everyone's pay):
+ * the worker is read from their own login, in their own business's data (the same dataset /me shows), and `fn`
+ * returns only what that one worker may see.
  */
-export async function respondWorker(fn: (ctx: { workerId: string; userId: string }) => Promise<unknown> | unknown) {
+export async function respondWorker(fn: (ctx: { session: SessionContext; worker: Worker }) => Promise<Record<string, unknown>> | Record<string, unknown>) {
   await connection();
-  const session = await getSession();
-  return runInWorkspace(session ? workspaceForBusiness(session.business.id, "demo") : "demo", async () => {
-    try {
-      const session = await requireApiRole(["worker"]);
-      if (!session.workerRef) throw new ServiceError("Your login isn't linked to a worker profile yet.", 403);
-      return NextResponse.json(await fn({ workerId: session.workerRef, userId: session.userId }));
-    } catch (err) {
-      if (err instanceof ServiceError) return NextResponse.json({ error: err.message }, { status: err.status });
-      console.error(err);
-      return NextResponse.json({ error: "Internal error" }, { status: 500 });
-    }
-  });
-}
-
-const buckets = () => ((globalThis as unknown as { __rate?: Map<string, number[]> }).__rate ??= new Map());
-
-/** In-memory sliding-window limit per key (single process, like the rest of the data layer). Throws a 429. */
-export function rateLimit(key: string, max: number, windowMs: number) {
-  const now = Date.now();
-  const hits = (buckets().get(key) ?? []).filter((t: number) => now - t < windowMs);
-  if (hits.length >= max) throw new ServiceError("Too many requests. Please wait a few minutes and try again.", 429);
-  hits.push(now);
-  buckets().set(key, hits);
+  try {
+    const session = await requireApiRole(["worker"]);
+    return await runInWorkspace(workspaceForBusiness(session.business.id, "demo"), async () => {
+      const worker = getDb().workers.find((w) => w.id === session.workerRef);
+      if (!worker) throw new ServiceError("Your login isn't linked to a worker profile yet. Ask your employer to link it.", 403);
+      return NextResponse.json(await fn({ session, worker }));
+    });
+  } catch (err) {
+    if (err instanceof ServiceError) return NextResponse.json({ error: err.message }, { status: err.status });
+    console.error(err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
 }

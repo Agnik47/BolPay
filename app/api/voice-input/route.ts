@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { SarvamError, transcribeAudio } from "@/app/lib/sarvam/client";
-import { guard, STAFF } from "@/app/lib/server/http";
+import { guard, SPEAKERS } from "@/app/lib/server/http";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -12,7 +12,7 @@ const MAX_BYTES = 10 * 1024 * 1024;
  * Returns `{ text }`. Sarvam's REST speech-to-text is meant for clips under about 30 seconds.
  */
 export async function POST(req: Request) {
-  const denied = await guard(STAFF);
+  const denied = await guard(SPEAKERS);
   if (denied) return denied;
   if (!process.env.SARVAM_API_KEY) {
     return NextResponse.json({ error: "Speech-to-text is not configured." }, { status: 503 });

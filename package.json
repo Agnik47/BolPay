@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:voice": "node --env-file-if-exists=.env.local scripts/voice-eval.mjs"
+    "test:voice": "node --env-file-if-exists=.env.local scripts/voice-eval.mjs",
+    "test:advances": "node scripts/advance-check.mjs && node --experimental-transform-types --import ./scripts/register-ts.mjs scripts/advance-flow-check.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",

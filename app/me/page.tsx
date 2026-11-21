@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { WorkerSkeleton } from "@/app/components/Skeleton";
 import { Brand } from "@/app/components/icons";
 import { SiteFooter } from "@/app/components/SiteFooter";
+import { AdvanceCard } from "@/app/components/worker/AdvanceCard";
 import { requireRole } from "@/app/lib/auth/dal";
 import { runInWorkspace, workspaceForBusiness } from "@/app/lib/server/db";
 import { getSnapshot } from "@/app/lib/server/service";
@@ -10,7 +11,6 @@ import { calculatePay } from "@/app/lib/merchant/incentives";
 import { dateRange, formatDate, formatDateTime, formatMoney } from "@/app/lib/merchant/format";
 import { Card, EmptyState, Notice, PageHeader, Stat, Stats, StatusBadge, td, th, thRight } from "@/app/components/merchant/ui";
 import { signOut } from "@/app/login/actions";
-import { AdvanceCard } from "@/app/components/me/AdvanceCard";
 
 export const metadata: Metadata = { title: "My pay · BolPay" };
 
@@ -63,7 +63,7 @@ async function MyPay() {
   const current = snap.attendance.filter((r) => r.workerId === worker.id && r.date >= period.start && r.date <= period.end);
   const pay = calculatePay(worker, current, snap.rules);
   const transactions = snap.transactions.filter((t) => t.workerId === worker.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const paidTotal = transactions.filter((t) => t.kind !== "advance" && t.status === "completed").reduce((s, t) => s + t.amount, 0);
+  const paidTotal = transactions.filter((t) => t.status === "completed").reduce((s, t) => s + t.amount, 0);
   const pending = snap.payouts.filter((p) => p.workerId === worker.id && (p.status === "pending" || p.status === "needs_review"));
   const byDate = new Map(current.map((r) => [r.date, r]));
 
@@ -77,17 +77,16 @@ async function MyPay() {
           <Stat label="Earned so far" value={formatMoney(pay.total)} hint="This period" />
           <Stat label="Days worked" value={String(pay.payDays)} hint={`of ${pay.periodDays} marked`} />
           <Stat label="Delivery bonus" value={formatMoney(pay.tierBonus + pay.performanceIncentive)} hint={`${pay.extraUnits} extra deliveries`} />
-          <Stat label="Paid to date" value={formatMoney(paidTotal)} hint="Wages, through Cashfree" />
+          <Stat label="Paid to date" value={formatMoney(paidTotal)} hint="Through Cashfree" />
         </Stats>
 
         {pending.length > 0 && (
           <Notice tone="info" className="mt-4">
-            {formatMoney(pending.reduce((s, p) => s + p.amount, 0))} is waiting for your employer&apos;s approval
-            {pending.some((p) => p.deductions?.length) ? `, after ${formatMoney(pending.reduce((s, p) => s + ((p.grossAmount ?? p.amount) - p.amount), 0))} is deducted for an advance you took` : ""}.
+            {formatMoney(pending.reduce((s, p) => s + p.amount, 0))} is waiting for your employer&apos;s approval.
           </Notice>
         )}
 
-        <AdvanceCard workerName={worker.name.split(" ")[0]} />
+        <AdvanceCard />
 
         <Card title="This period" className="mt-5">
           <div className="flex flex-wrap gap-1">
