@@ -1,5 +1,6 @@
 "use server";
 
+import { DEFAULT_WAGE } from "@/app/components/onboarding/flow";
 import { getAuthUser, getSession } from "@/app/lib/auth/dal";
 import { withRequestWorkspace } from "@/app/lib/server/http";
 import { applyBusinessSetup, assignSupervisor, ServiceError, type BusinessSetup } from "@/app/lib/server/service";
@@ -27,35 +28,28 @@ async function ownerSession() {
   return session;
 }
 
-/** Step 3 of the wizard: creates the business with the signed-in person as its owner. */
-export async function createBusiness(input: { name: string; type: string; city: string; teamSize: string }): Promise<Result> {
-  if (!(await getAuthUser())) return { error: "Your session expired. Sign in again." };
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("create_business", {
-    p_name: clean(input.name, 80),
-    p_type: clean(input.type, 40),
-    p_city: clean(input.city, 60),
-    p_team_size: clean(input.teamSize, 20),
-    p_period_days: 30,
-  });
-  if (error) return { error: friendly(error.message) };
-  return { ok: true };
-}
-
 const CYCLE_DAYS = { weekly: 7, fortnightly: 15, monthly: 30 } as const;
 
-/** Saves the pay cycle, default wage and rules preset. */
-export async function saveSetup(input: BusinessSetup): Promise<Result> {
+/**
+ * The only form in the wizard: creates the business with the signed-in person as its owner, and its pay cycle.
+ * Wage and rules start on defaults (₹800 a day, standard rules); both are edited later on Workers and Incentives.
+ */
+export async function setUpBusiness(input: { name: string; payCycle: BusinessSetup["payCycle"] }): Promise<Result> {
+  if (!(await getAuthUser())) return { error: "Your session expired. Sign in again." };
+  const payCycle = input.payCycle in CYCLE_DAYS ? input.payCycle : "monthly";
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("create_business", { p_name: clean(input.name, 80), p_period_days: CYCLE_DAYS[payCycle] });
+  if (error) return { error: friendly(error.message) };
+
+  // The business exists now, so a failure past here mustn't send the owner back to create it again.
   try {
     const session = await ownerSession();
-    await withRequestWorkspace(async () => applyBusinessSetup({ ...input, defaultWage: Number(input.defaultWage) }));
-    const supabase = await createClient();
-    await supabase.from("businesses").update({ period_length_days: CYCLE_DAYS[input.payCycle] ?? 30 }).eq("id", session.business.id);
+    await withRequestWorkspace(async () => applyBusinessSetup({ payCycle, defaultWage: DEFAULT_WAGE, preset: "standard" }));
     await setStepFor(session.business.id, "team");
-    return { ok: true };
   } catch (err) {
-    return { error: err instanceof ServiceError ? err.message : "Could not save your setup." };
+    console.error("business setup", err);
   }
+  return { ok: true };
 }
 
 async function setStepFor(businessId: string, step: string, extra: Record<string, unknown> = {}) {
@@ -63,18 +57,6 @@ async function setStepFor(businessId: string, step: string, extra: Record<string
   const { data } = await supabase.from("businesses").select("onboarding").eq("id", businessId).maybeSingle();
   const current = (data?.onboarding && typeof data.onboarding === "object" && !Array.isArray(data.onboarding) ? data.onboarding : {}) as Record<string, never>;
   await supabase.from("businesses").update({ onboarding: { ...current, step, ...extra } }).eq("id", businessId);
-}
-
-/** Remembers where the owner is, so a refresh (or a trip to Zoho and back) resumes at the same step. */
-export async function setOnboardingStep(step: string): Promise<Result> {
-  try {
-    const session = await ownerSession();
-    if (!/^[a-z]{2,12}$/.test(step)) return { error: "Unknown step." };
-    await setStepFor(session.business.id, step);
-    return { ok: true };
-  } catch (err) {
-    return { error: err instanceof ServiceError ? err.message : "Could not save your progress." };
-  }
 }
 
 /** Marks onboarding finished: the owner goes to the dashboard from now on. */

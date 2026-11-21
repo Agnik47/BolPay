@@ -23,12 +23,12 @@ async function call<T>(path: string, init?: RequestInit): Promise<T & { error?: 
  * "Bring your people in": Zoho People, a CSV, or one at a time. All three use the same endpoints as the Workers page,
  * which already enforce that only the owner can add people and that money fields are validated on the server.
  */
-export function TeamStep({ businessCity, defaultWage, zohoFlag, zohoReason, onAdded, onNext }: {
-  businessCity: string;
+export function TeamStep({ defaultWage, zohoFlag, zohoReason, busy: finishing, onNext }: {
   defaultWage: number;
   zohoFlag: string | null;
   zohoReason: string | null;
-  onAdded: (n: number) => void;
+  /** The parent is finishing onboarding. */
+  busy: boolean;
   onNext: () => void;
 }) {
   const reduce = useReducedMotion();
@@ -49,10 +49,7 @@ export function TeamStep({ businessCity, defaultWage, zohoFlag, zohoReason, onAd
     };
   }, []);
 
-  const add = (n: number) => {
-    setAdded((a) => a + n);
-    onAdded(n);
-  };
+  const add = (n: number) => setAdded((a) => a + n);
   const pick = (m: Method) => () => setOpen(open === m ? null : m);
 
   async function importZoho() {
@@ -69,7 +66,7 @@ export function TeamStep({ businessCity, defaultWage, zohoFlag, zohoReason, onAd
   return (
     <>
       <Title accent="people">Bring your people in.</Title>
-      <Sub>Pick whichever is quickest. You can do the others later from the Workers page.</Sub>
+      <Sub>Pick whichever is quickest, or skip it and add them from the Workers page.</Sub>
 
       <Stagger className="mt-9 grid gap-4 sm:grid-cols-3" role="radiogroup" label="How to add your team">
         {[
@@ -107,7 +104,7 @@ export function TeamStep({ businessCity, defaultWage, zohoFlag, zohoReason, onAd
                   </div>
                 ))}
               {open === "csv" && <CsvImport onAdded={add} setError={setError} setNote={setNote} />}
-              {open === "manual" && <ManualAdd city={businessCity} wage={defaultWage} onAdded={() => add(1)} setError={setError} setNote={setNote} />}
+              {open === "manual" && <ManualAdd wage={defaultWage} onAdded={() => add(1)} setError={setError} setNote={setNote} />}
             </Panel>
           </motion.div>
         )}
@@ -121,8 +118,8 @@ export function TeamStep({ businessCity, defaultWage, zohoFlag, zohoReason, onAd
         </p>
       )}
 
-      <Actions onSkip={added === 0 ? onNext : undefined} busy={busy}>
-        <Pill onClick={onNext} disabled={busy}>{added > 0 ? `Continue · ${added} added` : "Continue"}</Pill>
+      <Actions>
+        <Pill onClick={onNext} disabled={busy || finishing}>{finishing ? "Opening…" : added > 0 ? `Open my dashboard · ${added} added` : "Open my dashboard"}</Pill>
       </Actions>
     </>
   );
@@ -176,7 +173,8 @@ function CsvImport({ onAdded, setError, setNote }: { onAdded: (n: number) => voi
   );
 }
 
-function ManualAdd({ city, wage, onAdded, setError, setNote }: { city: string; wage: number; onAdded: () => void; setError: (e: string | null) => void; setNote: (n: string | null) => void }) {
+/** Just a name and a UPI id; role, city and phone can be filled in later on the Workers page. */
+function ManualAdd({ wage, onAdded, setError, setNote }: { wage: number; onAdded: () => void; setError: (e: string | null) => void; setNote: (n: string | null) => void }) {
   const [busy, setBusy] = useState(false);
   const form = useRef<HTMLFormElement>(null);
 
@@ -188,7 +186,7 @@ function ManualAdd({ city, wage, onAdded, setError, setNote }: { city: string; w
     setNote(null);
     const d = await call("/api/workers", {
       method: "POST",
-      body: JSON.stringify({ name: f.get("name"), role: f.get("role"), city: f.get("city"), dailyWage: Number(f.get("wage")), payoutUpi: f.get("upi") || "", phone: f.get("phone") || "" }),
+      body: JSON.stringify({ name: f.get("name"), role: "Worker", dailyWage: wage, payoutUpi: f.get("upi") || "" }),
     });
     setBusy(false);
     if (d.error) return setError(d.error);
@@ -198,14 +196,10 @@ function ManualAdd({ city, wage, onAdded, setError, setNote }: { city: string; w
   }
 
   return (
-    <form ref={form} onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
-      <label><FieldCaption>Name</FieldCaption><FillInput name="name" required maxLength={80} /></label>
-      <label><FieldCaption>Role</FieldCaption><FillInput name="role" required maxLength={80} defaultValue="Worker" /></label>
-      <label><FieldCaption>City</FieldCaption><FillInput name="city" required maxLength={60} defaultValue={city} /></label>
-      <label><FieldCaption>Daily wage (₹)</FieldCaption><FillInput name="wage" type="number" required min={1} max={100000} defaultValue={wage} inputMode="numeric" /></label>
-      <label><FieldCaption>UPI id (needed before payouts)</FieldCaption><FillInput name="upi" maxLength={80} placeholder="name@bank" spellCheck={false} /></label>
-      <label><FieldCaption>Phone</FieldCaption><FillInput name="phone" type="tel" maxLength={40} inputMode="tel" /></label>
-      <div className="sm:col-span-2"><SoftButton type="submit" disabled={busy}>{busy ? "Adding…" : "Add worker"}</SoftButton></div>
+    <form ref={form} onSubmit={submit} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+      <label><FieldCaption>Name</FieldCaption><FillInput name="name" required maxLength={80} autoFocus /></label>
+      <label><FieldCaption>UPI id (optional)</FieldCaption><FillInput name="upi" maxLength={80} placeholder="name@bank" spellCheck={false} /></label>
+      <SoftButton type="submit" disabled={busy} className="h-12">{busy ? "Adding…" : "Add"}</SoftButton>
     </form>
   );
 }
