@@ -259,6 +259,12 @@ async function handleTurnInner(input: TurnInput): Promise<TurnView> {
   const text = (input.text ?? "").trim().slice(0, 600);
   if (!text) return finish(s, { outcome: "error", speech: "I didn't catch anything. Please try again.", lines: [], awaiting: s.state === "idle" ? null : s.state === "confirming" ? "confirm" : "reply" });
 
+  // A lone yes/no/confirm with nothing waiting: there is nothing to act on, so don't ask the model to guess.
+  const bareReply = /^\s*(confirm|yes|yeah|ok|okay|sure|go ahead|cancel|no|stop|haan|nahi|ha)\s*[.!]?\s*$/i.test(text);
+  if (bareReply && s.state === "idle") {
+    return finish(s, { outcome: "rejected", speech: "There's nothing waiting to confirm or cancel. Tell me what you'd like to do.", lines: [], awaiting: null });
+  }
+
   let llmMs = 0;
   let llmCalls = 0;
   let superseded = false;
