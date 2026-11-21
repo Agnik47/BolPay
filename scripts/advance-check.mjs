@@ -1,6 +1,7 @@
 // Checks the deterministic rules behind emergency advances (app/lib/advances/policy.ts).
 // Run: node scripts/advance-check.mjs   (Node 22.18+ strips the TypeScript types itself)
 import assert from "node:assert/strict";
+import { isTestVpa, planTestUpiAssignment } from "../app/lib/cashfree/test-upi.ts";
 import { ADVANCE_RULES, classifyPurpose, evaluateEligibility, guessAmount, normalizeDigits, planRecovery, routeRequest } from "../app/lib/advances/policy.ts";
 
 let passed = 0;
@@ -139,6 +140,23 @@ t("purpose: a non-emergency is ineligible; an unclear one is eligible but flagge
   const maybe = evaluateEligibility({ ...base, purpose: { purpose: "unclear", note: "Owner decides." } });
   assert.equal(maybe.eligible, true);
   assert.ok(maybe.flags.includes("Owner decides."));
+});
+
+t("test UPI: fills only missing IDs, never overwrites a real one, honours the failure count", () => {
+  const ws = [
+    { id: "a", name: "Asha", status: "active", payoutUpi: "" },
+    { id: "b", name: "Bina", status: "active", payoutUpi: "" },
+    { id: "c", name: "Chetan", status: "active", payoutUpi: "chetan@okhdfc" },
+    { id: "d", name: "Dev", status: "inactive", payoutUpi: "" },
+  ];
+  const plan = planTestUpiAssignment(ws, { failCount: 1 });
+  assert.deepEqual(plan.changes.map((c) => c.id).sort(), ["a", "b"]);
+  assert.equal(plan.failing, 1);
+  assert.equal(plan.skippedReal, 1);
+  assert.ok(plan.changes.every((c) => isTestVpa(c.upi)));
+  assert.equal(plan.changes.find((c) => c.id === "a").upi, "failure@upi", "first by name gets the failing ID");
+  assert.equal(isTestVpa("Success@UPI"), true);
+  assert.equal(isTestVpa("ravi@okaxis"), false);
 });
 
 console.log(`\n${passed} checks passed`);

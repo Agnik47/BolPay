@@ -4,6 +4,7 @@ import { IntentModelError } from "@/app/lib/ai/intent";
 import { translateReply } from "@/app/lib/ai/translate";
 import { logAudit } from "@/app/lib/server/db";
 import { describePreview, previewMoney, runPlan, type StepOutcome, type VoiceRole } from "./executor";
+import { generalReply } from "./general";
 import { recordTurn } from "./metrics";
 import { classifyReply, fastClassify, planTurn, type PendingQuestion } from "./planner";
 import { resolveSteps } from "./resolver";
@@ -302,6 +303,14 @@ async function handleTurnInner(input: TurnInput): Promise<TurnView> {
 
     if (plan.steps.length === 0) {
       clearPending(s);
+      // Not an action: answer it conversationally (questions, remarks, "tell me about advances") instead of refusing.
+      // A lone yes/no/confirm with nothing waiting is not a question: refuse it as before.
+      const bare = /^\s*(confirm|yes|yeah|ok|okay|sure|go ahead|cancel|no|stop|haan|nahi|ha)\s*[.!]?\s*$/i.test(text);
+      const reply = superseded || bare ? null : await generalReply(text, s.language);
+      if (reply) {
+        record("answered", 0);
+        return finish(s, { outcome: "answered", speech: reply, lines: [], awaiting: null });
+      }
       record(superseded ? "superseded" : "rejected", 0);
       return finish(s, { outcome: superseded ? "superseded" : "rejected", speech: `${note}${plan.notUnderstood ? `I can't do that: ${plan.notUnderstood} Ask me what I can do to see what's possible.` : "Sorry, I didn't understand. You can say things like mark Ravi present, prepare payouts, or approve Anita's payout. Ask me what I can do for more."}`, lines: [], awaiting: null });
     }
