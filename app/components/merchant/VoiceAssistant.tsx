@@ -6,7 +6,7 @@ import { useStore, type Snapshot } from "@/app/lib/merchant/store";
 import { playSound } from "@/app/lib/client/sounds";
 import { IconClose, IconMic } from "../icons";
 import { useSpeaker } from "./useSpeaker";
-import { AssistantStage } from "../me/AssistantStage";
+import { LazyAssistantStage } from "../Lazy";
 import { useViewer } from "./viewer";
 
 type Phase = "idle" | "recording" | "transcribing";
@@ -369,13 +369,13 @@ export function VoiceAssistant() {
 
   return (
     <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3">
-      {stage && <AssistantStage role={role} userName={displayName} onClose={() => setStage(false)} onSnapshot={store.applySnapshot} />}
+      {stage && <LazyAssistantStage role={role} userName={displayName} onClose={() => setStage(false)} onSnapshot={store.applySnapshot} />}
       {open && (
         <div
           role="dialog"
           aria-label="Voice assistant"
           onKeyDown={(e) => e.key === "Escape" && phase !== "recording" && setOpen(false)}
-          className="flex h-[min(82vh,42rem)] w-[min(calc(100vw-2rem),24rem)] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_12px_32px_-12px_rgba(15,23,42,0.25)]"
+          className="flex h-[min(82vh,42rem)] w-[min(calc(100vw-2rem),24rem)] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_12px_32px_-12px_rgba(15,23,42,0.25)] max-sm:fixed max-sm:inset-0 max-sm:z-50 max-sm:h-dvh max-sm:w-full max-sm:rounded-none max-sm:border-0 max-sm:pb-[env(safe-area-inset-bottom)] max-sm:pt-[env(safe-area-inset-top)]"
         >
           {/* header: who, what state, and the two things you may need at any time */}
           <div className="flex items-start justify-between gap-2 border-b border-slate-200 px-4 py-3">
@@ -579,7 +579,7 @@ export function VoiceAssistant() {
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Close voice assistant" : "Open voice assistant"}
         aria-expanded={open}
-        className="relative flex size-12 items-center justify-center rounded-full bg-teal-700 text-white shadow-[0_6px_16px_-6px_rgba(15,23,42,0.45)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+        className={`${open ? "max-sm:hidden" : ""} relative flex size-12 items-center justify-center rounded-full bg-teal-700 text-white shadow-[0_6px_16px_-6px_rgba(15,23,42,0.45)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700`}
       >
         {!open && awaiting && <span className="absolute -right-0.5 -top-0.5 size-3 animate-pulse rounded-full bg-amber-400 ring-2 ring-white" aria-label="Waiting for your reply" />}
         {open ? <IconClose className="size-5" /> : <IconMic className="size-5" />}

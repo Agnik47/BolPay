@@ -10,6 +10,7 @@ import { calculatePay } from "@/app/lib/merchant/incentives";
 import { dateRange, formatDate, formatDateTime, formatMoney } from "@/app/lib/merchant/format";
 import { Card, EmptyState, Notice, PageHeader, Stat, Stats, StatusBadge, td, th, thRight } from "@/app/components/merchant/ui";
 import { signOut } from "@/app/login/actions";
+import { PagedTable } from "@/app/components/PagedTable";
 import { AdvanceCard } from "@/app/components/me/AdvanceCard";
 import { AssistantLauncher } from "@/app/components/me/AssistantLauncher";
 
@@ -118,10 +119,9 @@ async function MyPay() {
         <Card title="Payment history" className="mt-5" flush>
           {transactions.length === 0 ? <EmptyState>No payments yet.</EmptyState> : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px]">
-                <thead><tr><th className={th}>Period</th><th className={th}>Date</th><th className={th}>Reference</th><th className={thRight}>Amount</th><th className={th}>Status</th></tr></thead>
-                <tbody className="divide-y divide-slate-100">
-                  {transactions.map((t) => (
+              <PagedTable className="w-full min-w-[520px]" label="payments"
+                head={<tr><th className={th}>Period</th><th className={th}>Date</th><th className={th}>Reference</th><th className={thRight}>Amount</th><th className={th}>Status</th></tr>}
+                rows={transactions.map((t) => (
                     <tr key={t.id}>
                       <td className={`${td} whitespace-nowrap`}>{t.periodLabel}</td>
                       <td className={`${td} whitespace-nowrap text-slate-500`}>{formatDateTime(t.createdAt)}</td>
@@ -132,9 +132,8 @@ async function MyPay() {
                       </td>
                       <td className={td}><StatusBadge status={t.status} /></td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                ))}
+              />
             </div>
           )}
         </Card>

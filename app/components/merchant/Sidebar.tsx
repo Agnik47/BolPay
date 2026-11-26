@@ -25,7 +25,7 @@ export function Sidebar({ role, pendingCount }: { role: Role; pendingCount: numb
   const pathname = usePathname();
   return (
     <>
-      <nav aria-label="Main" className="flex gap-0.5 overflow-x-auto md:flex-col">
+      <nav aria-label="Main" className="flex flex-col gap-0.5">
         {NAV.filter((item) => role === "owner" || !OWNER_ONLY.has(item.href)).map(({ href, label, Icon }) => {
           const active = pathname === href;
           return (

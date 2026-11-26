@@ -89,6 +89,8 @@ async function request(method: string, path: string, body?: unknown): Promise<Ap
       method,
       headers: body === undefined ? undefined : { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
+      // Small attendance writes must still arrive if the page is closed right after typing.
+      keepalive: path === "/api/attendance",
     });
     const data = (await res.json().catch(() => ({}))) as ApiResult;
     return { ...data, ok: res.ok };
@@ -97,17 +99,28 @@ async function request(method: string, path: string, body?: unknown): Promise<Ap
   }
 }
 
+/** How long typing has to pause before it is sent. */
+const TYPING_PAUSE_MS = 600;
+type PendingWrite = { workerId: string; date: string; patch: Partial<AttendanceRecord>; timer: ReturnType<typeof setTimeout> };
+
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, EMPTY);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /** Takes a server snapshot, keeping values that are typed but not yet sent on top of it. */
+  const pending = useRef(new Map<string, PendingWrite>());
+  const replace = useCallback((snapshot: Snapshot) => {
+    dispatch({ type: "replace", snapshot });
+    for (const p of pending.current.values()) dispatch({ type: "setAttendance", workerId: p.workerId, date: p.date, patch: p.patch });
+  }, []);
+
   /** Applies a server response; returns whether it succeeded. */
   const apply = useCallback((r: ApiResult & { ok: boolean }) => {
-    if (r.state) dispatch({ type: "replace", snapshot: r.state });
+    if (r.state) replace(r.state);
     if (!r.ok) setError(r.error ?? "Something went wrong");
     return r.ok;
-  }, []);
+  }, [replace]);
 
   const refresh = useCallback(async () => {
     const r = await request("GET", "/api/state");
@@ -142,16 +155,47 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [refresh],
   );
 
+  // Debounced writes, one per worker and day. Pending patches are merged, so only the final value is sent.
+  const writeNow = useCallback(
+    (key: string) => {
+      const p = pending.current.get(key);
+      if (!p) return;
+      clearTimeout(p.timer);
+      pending.current.delete(key);
+      enqueue("PUT", "/api/attendance", { workerId: p.workerId, date: p.date, patch: p.patch });
+    },
+    [enqueue],
+  );
+  const writeSoon = useCallback(
+    (workerId: string, date: string, patch: Partial<AttendanceRecord>) => {
+      const key = `${workerId}|${date}`;
+      const prev = pending.current.get(key);
+      if (prev) clearTimeout(prev.timer);
+      pending.current.set(key, { workerId, date, patch: { ...prev?.patch, ...patch }, timer: setTimeout(() => writeNow(key), TYPING_PAUSE_MS) });
+    },
+    [writeNow],
+  );
+  const writeAll = useCallback(() => [...pending.current.keys()].forEach(writeNow), [writeNow]);
+  // Leaving the app or the page sends whatever is still waiting.
+  useEffect(() => {
+    const onHide = () => writeAll();
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      writeAll();
+    };
+  }, [writeAll]);
+
   // While any payment is in flight, ask the server to re-check Cashfree.
   const hasProcessing = state.transactions.some((t) => t.status === "processing");
   useEffect(() => {
     if (!hasProcessing) return;
     const handle = setInterval(async () => {
       const r = await request("POST", "/api/payouts/sync");
-      if (r.state) dispatch({ type: "replace", snapshot: r.state });
+      if (r.state) replace(r.state);
     }, POLL_MS);
     return () => clearInterval(handle);
-  }, [hasProcessing]);
+  }, [hasProcessing, replace]);
 
   const store = useMemo<Store>(() => {
     const act = async (method: string, path: string, body?: unknown) => apply(await request(method, path, body));
@@ -165,13 +209,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: "updateWorker", id, patch });
         enqueue("PATCH", `/api/workers/${encodeURIComponent(id)}`, patch);
       },
+      // Typed values (overtime, units): the screen updates at once, the server gets one write after typing stops.
       setAttendance: (workerId, date, patch) => {
         dispatch({ type: "setAttendance", workerId, date, patch });
-        enqueue("PUT", "/api/attendance", { workerId, date, patch });
+        writeSoon(workerId, date, patch);
       },
       markStatus: (workerId, date, status) => {
         const patch = status === "absent" || status === "leave" ? { status, overtimeHours: 0, units: 0 } : { status };
         dispatch({ type: "setAttendance", workerId, date, patch });
+        writeNow(`${workerId}|${date}`); // typed values go first, so a later "absent" can't be undone by them
         enqueue("PUT", "/api/attendance", { workerId, date, patch });
       },
       setRules: (rules) => {
@@ -179,12 +225,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         enqueue("PUT", "/api/rules", rules);
       },
       submitPeriodForApproval: async (filter) => {
-        // Make sure queued attendance edits are saved before the server computes pay.
+        // Make sure typed and queued attendance edits are saved before the server computes pay.
+        writeAll();
         await queue.current;
         const r = await request("POST", "/api/payouts/submit-period", filter ?? {});
         return apply(r) ? { created: r.created ?? 0, needsReview: r.needsReview ?? 0, skipped: r.skipped ?? 0 } : { created: 0, needsReview: 0, skipped: 0 };
       },
       importCsv: async (kind, csv) => {
+        writeAll();
         await queue.current;
         const r = await request("POST", "/api/import", { kind, csv });
         return apply(r) ? (r.import ?? null) : null;
@@ -193,12 +241,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       rejectPayouts: (ids) => act("POST", "/api/payouts/decide", { ids, decision: "rejected" }),
       retryTransaction: (id) => act("POST", `/api/transactions/${encodeURIComponent(id)}/retry`),
       workerById: (id) => state.workers.find((w) => w.id === id),
-      applySnapshot: (snapshot) => dispatch({ type: "replace", snapshot }),
+      applySnapshot: replace,
       flush: async () => {
+        writeAll();
         await queue.current;
       },
     };
-  }, [state, loaded, error, apply, enqueue]);
+  }, [state, loaded, error, apply, enqueue, writeSoon, writeNow, writeAll, replace]);
 
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }

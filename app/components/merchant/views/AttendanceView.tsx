@@ -7,6 +7,8 @@ import { dateRange, formatDate } from "@/app/lib/merchant/format";
 import type { AttendanceStatus } from "@/app/lib/merchant/types";
 import { useToast } from "../../feedback/Toaster";
 import { Avatar, Button, Card, EmptyState, fieldClass, PageHeader, Segmented, td, th } from "../ui";
+import { Pager, usePaged } from "../../Pager";
+import { RTable } from "../../RTable";
 
 // AG Grid is ~335 kB gzipped and the history sits below the fold, so load it after the daily editor.
 const AttendanceHistory = dynamic(() => import("../AttendanceHistory").then((m) => m.AttendanceHistory), {
@@ -32,7 +34,9 @@ export function AttendanceView() {
   const { workers, attendance, period, today, markStatus, setAttendance } = useStore();
   const [date, setDate] = useState(today);
   const dates = useMemo(() => dateRange(period.start, period.end), [period]);
-  const active = workers.filter((w) => w.status === "active");
+  const active = useMemo(() => workers.filter((w) => w.status === "active"), [workers]);
+  const paged = usePaged(active);
+  const overview = usePaged(active);
   const day = attendance.filter((r) => r.date === date);
   const byWorker = new Map(day.map((r) => [r.workerId, r]));
   const unmarked = active.filter((w) => !byWorker.has(w.id));
@@ -71,10 +75,10 @@ export function AttendanceView() {
       >
         {active.length === 0 ? <EmptyState>No active workers.</EmptyState> : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px]">
+            <RTable className="w-full min-w-[720px]">
               <thead><tr><th className={th}>Worker</th><th className={th}>Status</th><th className={th}>Overtime (h)</th><th className={th}>Units done</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
-                {active.map((w) => {
+                {paged.rows.map((w) => {
                   const rec = byWorker.get(w.id);
                   const worked = rec?.status === "present" || rec?.status === "half";
                   return (
@@ -88,19 +92,20 @@ export function AttendanceView() {
                       </td>
                       <td className={td}>
                         <input type="number" min="0" max="12" step="0.5" disabled={!worked} aria-label={`Overtime hours for ${w.name}`} className={fieldClass("h-7 w-20 px-2 text-sm tabular-nums")}
-                          value={rec?.overtimeHours ?? 0} onChange={(e) => setAttendance(w.id, date, { overtimeHours: Math.max(0, Number(e.target.value)) })} />
+                          value={rec?.overtimeHours ?? 0} onFocus={(e) => e.target.select()} onChange={(e) => setAttendance(w.id, date, { overtimeHours: Math.max(0, Number(e.target.value)) })} />
                       </td>
                       <td className={td}>
                         <input type="number" min="0" step="1" disabled={!worked} aria-label={`Units completed by ${w.name}`} className={fieldClass("h-7 w-24 px-2 text-sm tabular-nums")}
-                          value={rec?.units ?? 0} onChange={(e) => setAttendance(w.id, date, { units: Math.max(0, Number(e.target.value)) })} />
+                          value={rec?.units ?? 0} onFocus={(e) => e.target.select()} onChange={(e) => setAttendance(w.id, date, { units: Math.max(0, Number(e.target.value)) })} />
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
-            </table>
+            </RTable>
           </div>
         )}
+        <Pager {...paged} label="workers" />
       </Card>
 
       <Card title="Period overview" flush>
@@ -125,9 +130,9 @@ export function AttendanceView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {active.map((w) => (
+              {overview.rows.map((w) => (
                 <tr key={w.id}>
-                  <td className="whitespace-nowrap px-4 py-2 text-sm text-slate-700">{w.name}</td>
+                  <td className="sticky left-0 z-[1] whitespace-nowrap bg-white px-4 py-2 text-sm text-slate-700">{w.name}</td>
                   {dates.map((d) => {
                     const r = byKey.get(`${w.id}|${d}`);
                     return (
@@ -141,6 +146,7 @@ export function AttendanceView() {
             </tbody>
           </table>
         </div>
+        <Pager {...overview} label="workers in the overview" />
         <div className="flex flex-wrap gap-4 border-t border-slate-200 px-4 py-2.5 text-xs text-slate-500">
           {OPTIONS.map((o) => <span key={o.value} className="flex items-center gap-1.5"><span className={`size-2.5 rounded-sm ${o.dot}`} />{o.label}</span>)}
           <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm bg-slate-200" />Not marked</span>

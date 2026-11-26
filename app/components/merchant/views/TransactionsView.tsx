@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useStore } from "@/app/lib/merchant/store";
 import { formatDateTime, formatMoney } from "@/app/lib/merchant/format";
 import type { TransactionStatus } from "@/app/lib/merchant/types";
 import { useToast } from "../../feedback/Toaster";
 import { Avatar, Badge, Button, Card, EmptyState, PageHeader, Segmented, Stat, Stats, StatusBadge, td, th, thRight } from "../ui";
+import { Pager, usePaged } from "../../Pager";
+import { RTable } from "../../RTable";
 
 type Filter = "all" | TransactionStatus;
 const FILTERS: { value: Filter; label: string }[] = [
@@ -33,9 +35,11 @@ export function TransactionsView() {
 
   const sum = (s: TransactionStatus) => transactions.filter((t) => t.status === s).reduce((a, t) => a + t.amount, 0);
   const count = (s: TransactionStatus) => transactions.filter((t) => t.status === s).length;
-  const shown = [...transactions]
-    .filter((t) => filter === "all" || t.status === filter)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const shown = useMemo(
+    () => transactions.filter((t) => filter === "all" || t.status === filter).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [transactions, filter],
+  );
+  const paged = usePaged(shown, 10, filter);
 
   return (
     <>
@@ -54,7 +58,7 @@ export function TransactionsView() {
         </div>
         {shown.length === 0 ? <EmptyState>No transactions to show.</EmptyState> : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px]">
+            <RTable className="w-full min-w-[760px]">
               <thead>
                 <tr>
                   <th className={th}>Worker</th><th className={th}>Reference</th><th className={th}>Period</th><th className={th}>Created</th>
@@ -62,7 +66,7 @@ export function TransactionsView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {shown.map((t) => {
+                {paged.rows.map((t) => {
                   const w = workerById(t.workerId);
                   const name = w?.name ?? "this worker";
                   return (
@@ -90,9 +94,10 @@ export function TransactionsView() {
                   );
                 })}
               </tbody>
-            </table>
+            </RTable>
           </div>
         )}
+        <Pager {...paged} label="transactions" />
       </Card>
     </>
   );

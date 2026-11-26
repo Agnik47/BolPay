@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { CAST, Person } from "@/app/components/onboarding/art";
 import { Actions, Celebrate, ErrorText, LineInput, Pill, SoftButton, Sub, TextButton, Title } from "@/app/components/onboarding/kit";
 import { Stage } from "@/app/components/onboarding/Stage";
+import { Pager, usePaged } from "@/app/components/Pager";
+import { ListSkeleton } from "@/app/components/Skeleton";
 import { claimTeam, getMyPayInfo, getTeamPool, joinAsCurrentUser, joinWithInvite, saveMyUpi, type JoinState } from "./actions";
 
 type Role = "supervisor" | "worker";
@@ -202,7 +204,11 @@ function TeamPick({ onNext }: { onNext: () => void }) {
     };
   }, []);
 
-  const shown = (pool ?? []).filter((w) => `${w.name} ${w.role} ${w.city}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const shown = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return (pool ?? []).filter((w) => `${w.name} ${w.role} ${w.city}`.toLowerCase().includes(needle));
+  }, [pool, query]);
+  const pagedPool = usePaged(shown, 10, query);
   const toggle = (id: string) =>
     setPicked((s) => {
       const n = new Set(s);
@@ -225,7 +231,7 @@ function TeamPick({ onNext }: { onNext: () => void }) {
       <Title accent="team">Pick your team.</Title>
       <Sub>These workers have no supervisor yet. Tick the ones you&apos;ll look after. The owner can change this later.</Sub>
       {pool === null ? (
-        <p className="mt-8 text-center text-sm text-[#16152b]/55">Loading workers…</p>
+        <ListSkeleton label="Loading workers" />
       ) : pool.length === 0 ? (
         <p className="mx-auto mt-8 max-w-sm text-center text-sm leading-relaxed text-[#16152b]/60">There&apos;s nobody to pick yet. The owner hasn&apos;t added workers, or they all have a supervisor. Ask the owner to assign people to you.</p>
       ) : (
@@ -235,7 +241,7 @@ function TeamPick({ onNext }: { onNext: () => void }) {
             <SoftButton tone="light" onClick={() => setPicked(picked.size === shown.length ? new Set() : new Set(shown.map((w) => w.id)))}>{picked.size === shown.length && shown.length > 0 ? "Clear" : "All"}</SoftButton>
           </div>
           <ul className="mt-3 max-h-72 overflow-y-auto rounded-[24px] bg-white/80 p-2 shadow-[0_24px_60px_-30px_rgba(22,21,43,0.5)] backdrop-blur" aria-label="Workers without a supervisor">
-            {shown.map((w) => (
+            {pagedPool.rows.map((w) => (
               <li key={w.id}>
                 <label className={`flex cursor-pointer items-center gap-3 rounded-2xl px-4 py-2.5 transition ${picked.has(w.id) ? "bg-[#ffe9c9]" : "hover:bg-[#16152b]/[0.04]"}`}>
                   <input type="checkbox" checked={picked.has(w.id)} onChange={() => toggle(w.id)} className="size-4 accent-[#16152b]" />
@@ -247,6 +253,7 @@ function TeamPick({ onNext }: { onNext: () => void }) {
               </li>
             ))}
           </ul>
+          <Pager {...pagedPool} label="workers without a supervisor" />
         </div>
       )}
       <ErrorText>{error}</ErrorText>
@@ -283,7 +290,7 @@ function UpiStep({ onNext }: { onNext: () => void }) {
     onNext();
   }
 
-  if (!info) return <p className="text-center text-sm text-[#16152b]/55">Loading…</p>;
+  if (!info) return <ListSkeleton label="Loading" rows={3} />;
   if (info.upi) {
     return (
       <>

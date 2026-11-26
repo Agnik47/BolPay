@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { IconMic } from "../icons";
 import { Card } from "../merchant/ui";
-import { AssistantStage } from "./AssistantStage";
+import { LazyAssistantStage } from "../Lazy";
 
 /** The worker's entry to the full-screen BolPay Voice AI: ask about pay and advances in their own language. */
 export function AssistantLauncher({ workerName }: { workerName: string }) {
@@ -21,7 +21,7 @@ export function AssistantLauncher({ workerName }: { workerName: string }) {
           </button>
         </div>
       </Card>
-      {open && <AssistantStage role="worker" userName={workerName} onClose={() => setOpen(false)} />}
+      {open && <LazyAssistantStage role="worker" userName={workerName} onClose={() => setOpen(false)} />}
     </>
   );
 }

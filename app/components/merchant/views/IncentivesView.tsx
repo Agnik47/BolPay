@@ -6,10 +6,13 @@ import { formatMoney } from "@/app/lib/merchant/format";
 import type { DeliveryTier, IncentiveRules } from "@/app/lib/merchant/types";
 import { useToast } from "../../feedback/Toaster";
 import { Avatar, Badge, Button, Card, Field, fieldClass, inputClass, PageHeader, Stat, Stats, td, th, thRight } from "../ui";
+import { Pager, usePaged } from "../../Pager";
+import { RTable } from "../../RTable";
 
 export function IncentivesView() {
   const { rules, setRules, period, payouts, submitPeriodForApproval } = useStore();
   const rows = usePeriodPay();
+  const paged = usePaged(rows);
   const toast = useToast();
   const [draft, setDraft] = useState<Record<keyof IncentiveRules, string>>(
     () => Object.fromEntries(Object.entries(rules).map(([k, v]) => [k, String(v)])) as Record<keyof IncentiveRules, string>,
@@ -73,7 +76,7 @@ export function IncentivesView() {
 
       <Card title="Payout summary" className="mb-5" flush>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[940px]">
+          <RTable className="w-full min-w-[940px]">
             <thead>
               <tr>
                 <th className={th}>Worker</th>
@@ -88,7 +91,7 @@ export function IncentivesView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map(({ worker, pay }) => (
+              {paged.rows.map(({ worker, pay }) => (
                 <tr key={worker.id}>
                   <td className={td}><div className="flex items-center gap-2.5"><Avatar name={worker.name} /><div><p className="font-medium text-slate-900">{worker.name}</p><p className="text-xs text-slate-500">{Math.round(pay.attendanceRate * 100)}% attendance</p></div></div></td>
                   <td className={`${td} text-right tabular-nums`}>{pay.payDays} / {pay.periodDays}</td>
@@ -102,8 +105,9 @@ export function IncentivesView() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </RTable>
         </div>
+        <Pager {...paged} label="workers" />
       </Card>
 
       <Card

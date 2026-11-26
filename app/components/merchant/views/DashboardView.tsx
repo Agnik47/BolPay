@@ -6,6 +6,7 @@ import { formatDateTime, formatMoney } from "@/app/lib/merchant/format";
 import { SetupChecklist } from "../SetupChecklist";
 import { useViewer } from "../viewer";
 import { Avatar, buttonClass, Card, EmptyState, linkClass, Notice, PageHeader, Stat, Stats, StatusBadge, td, th, thRight } from "../ui";
+import { RTable } from "../../RTable";
 
 export function DashboardView() {
   const { workers, today, period, payouts, transactions: allTransactions, workerById, loaded } = useStore();
@@ -52,7 +53,7 @@ export function DashboardView() {
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <Card title="Top earners this period" flush>
           {top.length === 0 ? <EmptyState>No pay calculated yet.</EmptyState> : (
-            <table className="w-full">
+            <RTable className="w-full">
               <thead><tr><th className={th}>Worker</th><th className={thRight}>Incentives</th><th className={thRight}>Total</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {top.map(({ worker, pay: p }) => (
@@ -63,7 +64,7 @@ export function DashboardView() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </RTable>
           )}
         </Card>
 

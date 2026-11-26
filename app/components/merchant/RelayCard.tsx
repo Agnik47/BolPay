@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, Notice } from "./ui";
+import { ListSkeleton } from "../Skeleton";
 
 /** Sends a payroll summary to the Cashfree Relay "Payroll alert" agent through its Inbound Webhook. */
 export function RelayCard() {
@@ -33,6 +34,7 @@ export function RelayCard() {
     <Card title="Cashfree Relay: Payroll alert agent" actions={state && <Badge tone={state.configured ? "green" : "slate"}>{state.configured ? "Webhook set" : "Not set"}</Badge>}>
       <div className="space-y-3">
         <p className="text-sm text-slate-600">Sends this period&apos;s payroll summary to your Relay agent, which can email you. Only totals and counts are sent; no UPI ids, and no money moves.</p>
+        {!state && <ListSkeleton label="Loading payroll summary" rows={1} />}
         {state && <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-900">{state.event.period}: {state.event.summary}</p>}
         {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
         <Button variant="primary" disabled={busy || !state?.configured} onClick={send}>

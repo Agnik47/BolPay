@@ -145,7 +145,7 @@ export function VoiceStage({ mode, workerName, language, onLanguage, respond, on
   const shownText = mode === "respond" ? respond?.text ?? "" : transcript;
 
   return (
-    <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label="BolPay Voice AI" className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-[#04161a] text-white outline-none">
+    <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label="BolPay Voice AI" className="fixed inset-0 z-[60] flex flex-col overflow-y-auto overflow-x-hidden bg-[#04161a] text-white outline-none">
       <VoiceBackdrop />
 
       {/* Top bar */}

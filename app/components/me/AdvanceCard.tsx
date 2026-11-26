@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { formatDateTime, formatMoney } from "@/app/lib/merchant/format";
 import { IconAlert, IconMic } from "../icons";
 import { Badge, Button, Card, Field, inputClass, Notice, StatusBadge } from "../merchant/ui";
+import { Pager, usePaged } from "../Pager";
 import { api, JSON_HEADERS, LANG_KEY, LANGS, PICKER, type Preview } from "./advance-shared";
-import { VoiceStage } from "./VoiceStage";
+import { LazyVoiceStage } from "../Lazy";
 
 interface Limit { available: number; earnedLimit: number; outstanding: number; maxAmount: number; percent: number }
 interface Req { id: string; amount: number; reasonText: string; status: string; statusNote?: string; createdAt: string; owed?: number; recovered?: number }
@@ -14,6 +15,8 @@ interface State { limit: Limit; blocks: string[]; requests: Req[] }
 const REASONS: Record<string, string> = {
   vehicle_repair: "Vehicle repair", medical: "Medical", family_event: "Family event", housing: "Housing", education: "Education", other: "Other",
 };
+
+const NO_REQUESTS: Req[] = [];
 
 export function AdvanceCard({ workerName }: { workerName: string }) {
   const [state, setState] = useState<State | null>(null);
@@ -37,6 +40,8 @@ export function AdvanceCard({ workerName }: { workerName: string }) {
   const [done, setDone] = useState<{ request: Req; spoken: { text: string; language: string } | null } | null>(null);
   const [clipUrl, setClipUrl] = useState<string | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
+
+  const pagedRequests = usePaged(state?.requests ?? NO_REQUESTS, 5);
 
   const refresh = useCallback(async () => {
     const r = await api<State>("/api/me/advance");
@@ -329,7 +334,7 @@ export function AdvanceCard({ workerName }: { workerName: string }) {
             <div className="mt-5">
               <h3 className="mb-1.5 text-sm font-semibold text-slate-900">Your requests</h3>
               <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-                {state.requests.map((r) => (
+                {pagedRequests.rows.map((r) => (
                   <li key={r.id} className="flex flex-wrap items-start justify-between gap-2 px-3 py-2.5">
                     <div className="min-w-0">
                       <p className="text-sm font-medium tabular-nums text-slate-900">{formatMoney(r.amount)} <span className="font-normal text-slate-500">· {r.reasonText}</span></p>
@@ -346,13 +351,14 @@ export function AdvanceCard({ workerName }: { workerName: string }) {
                   </li>
                 ))}
               </ul>
+              <Pager {...pagedRequests} label="your requests" />
               {waiting && <p className="mt-1.5 text-xs text-slate-500">Your employer has not answered yet. You&apos;ll see the result here.</p>}
             </div>
           )}
         </>
       )}
           {stage && (
-        <VoiceStage
+        <LazyVoiceStage
           key={stage.mode}
           mode={stage.mode}
           workerName={workerName}

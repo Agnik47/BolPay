@@ -8,8 +8,9 @@ import { useToast } from "../../feedback/Toaster";
 import { IconAlert } from "../../icons";
 import { ConfirmDialog } from "../overlays";
 import { useViewer } from "../viewer";
-import { AdvancePolicyPanel } from "./AdvancePolicyPanel";
+import { LazyAdvancePolicyPanel } from "../../Lazy";
 import { Avatar, Badge, Button, Card, EmptyState, EnvBadge, inputClass, Notice, PageHeader, Segmented, Stat, Stats, StatusBadge } from "../ui";
+import { Pager, usePaged } from "../../Pager";
 
 type StaffAdvance = Omit<AdvanceRequest, "idempotencyKey"> & {
   worker: { id: string; name: string; city: string; role: string; dailyWage: number; hasUpi: boolean } | null;
@@ -103,6 +104,7 @@ export function AdvancesView() {
   const payments = list.filter((a) => ["paying", "paid", "payment_failed"].includes(a.status));
   const closed = list.filter((a) => ["rejected", "cancelled", "expired"].includes(a.status));
   const shown = view === "pending" ? pending : view === "payments" ? payments : view === "closed" ? closed : [];
+  const paged = usePaged(shown, 5, view);
   const agentPaid = list.filter((a) => a.agent?.action === "approve" && a.agent.executed && asOf - Date.parse(a.agent.at) < 86_400_000);
   const sum = (xs: StaffAdvance[], f: (a: StaffAdvance) => number) => xs.reduce((s, a) => s + f(a), 0);
   const paid = payments.filter((a) => a.status === "paid");
@@ -177,14 +179,14 @@ export function AdvancesView() {
       </div>
 
       {view === "settings" && isOwner ? (
-        <AdvancePolicyPanel onChanged={() => void load()} />
+        <LazyAdvancePolicyPanel onChanged={() => void load()} />
       ) : items === null ? (
         <div className="space-y-3" aria-busy="true" aria-label="Loading requests">{[0, 1].map((i) => <div key={i} className="h-40 animate-pulse rounded-xl bg-slate-100" />)}</div>
       ) : shown.length === 0 ? (
         <Card flush><EmptyState>{view === "pending" ? "No requests are waiting. Workers can ask from My Pay." : view === "payments" ? "No advance payments yet." : "Nothing closed yet."}</EmptyState></Card>
       ) : (
         <ul className="space-y-3">
-          {shown.map((a) => {
+          {paged.rows.map((a) => {
             const e = a.current ?? a.decisionEligibility ?? a.eligibility;
             const stale = a.current && a.current.available !== a.eligibility.available;
             return (
@@ -294,6 +296,9 @@ export function AdvancesView() {
             );
           })}
         </ul>
+      )}
+      {view !== "settings" && paged.pages > 1 && (
+        <div className="mt-3 rounded-lg border border-slate-200 bg-white [&>nav]:border-t-0"><Pager {...paged} label="advance requests" /></div>
       )}
 
       <ConfirmDialog

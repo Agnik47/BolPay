@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { AccountMenu } from "./AccountMenu";
 import { VoiceAssistant } from "./VoiceAssistant";
@@ -70,23 +70,68 @@ function Frame({ children }: { children: React.ReactNode }) {
   const name = personName(viewer.displayName);
   const role = ROLE_LABEL[viewer.role];
 
+  const [menu, setMenu] = useState(false);
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenu(false);
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [menu]);
+
   return (
     // minmax(0, 1fr): a wide table must scroll inside its card, never widen the page.
     <div className="min-h-dvh bg-canvas text-slate-900 md:grid md:grid-cols-[216px_minmax(0,1fr)]">
-      <aside className="flex flex-col border-b border-slate-200 bg-white md:sticky md:top-0 md:h-dvh md:border-b-0 md:border-r">
-        <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-3 md:py-4">
+      <aside className="sticky top-0 hidden h-dvh flex-col border-r border-slate-200 bg-white md:flex">
+        <div className="px-4 py-4">
           <Brand sub={viewer.businessName} />
-          <div className="md:hidden">
-            <AccountMenu name={name} role={role} compact />
-          </div>
         </div>
-        <div className="min-h-0 px-2 pb-2 md:flex-1 md:overflow-y-auto md:px-3">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-2">
           <Sidebar role={viewer.role} pendingCount={pending} />
         </div>
-        <div className="hidden border-t border-slate-200 p-2 md:block">
+        <div className="border-t border-slate-200 p-2">
           <AccountMenu name={name} role={role} />
         </div>
       </aside>
+
+      {/* Phones: a slim top bar, with the whole navigation in a drawer. */}
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] md:hidden">
+        <div className="flex min-w-0 items-center gap-2">
+          <button type="button" onClick={() => setMenu(true)} aria-label="Open menu" aria-expanded={menu} className="relative flex size-10 shrink-0 items-center justify-center rounded-md text-slate-700 hover:bg-slate-100">
+            <svg viewBox="0 0 20 20" aria-hidden className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <path d="M3 5.5h14M3 10h14M3 14.5h14" />
+            </svg>
+            {pending > 0 && viewer.role === "owner" && <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-amber-500" aria-hidden />}
+          </button>
+          <Brand sub={viewer.businessName} />
+        </div>
+        <AccountMenu name={name} role={role} compact />
+      </header>
+      {menu && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <button type="button" aria-label="Close menu" tabIndex={-1} onClick={() => setMenu(false)} className="absolute inset-0 bg-slate-900/50" />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu"
+            // Following any link closes the drawer.
+            onClick={(e) => (e.target as HTMLElement).closest("a") && setMenu(false)}
+            className="absolute inset-y-0 left-0 flex w-[min(18rem,85vw)] flex-col bg-white shadow-xl [&_nav_a]:py-2.5"
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+              <Brand sub={viewer.businessName} />
+              <button type="button" autoFocus onClick={() => setMenu(false)} aria-label="Close menu" className="flex size-10 shrink-0 items-center justify-center rounded-md text-xl text-slate-500 hover:bg-slate-100">×</button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+              <Sidebar role={viewer.role} pendingCount={pending} />
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="mx-auto w-full min-w-0 max-w-6xl px-4 py-5 pb-28 md:px-8 md:py-7">
         {!loaded && <ContentSkeleton />}
         {/* Always rendered (so Next can validate the page) but hidden until data arrives, to avoid a flash of empty state. */}

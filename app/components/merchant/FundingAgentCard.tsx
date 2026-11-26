@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Badge, Button, buttonClass, Card, inputClass, Notice } from "./ui";
+import { ListSkeleton } from "../Skeleton";
 
 interface McpStatus {
   connected: boolean;
@@ -71,6 +72,7 @@ export function FundingAgentCard({ manage = false }: { manage?: boolean }) {
       actions={status && <Badge tone={status.connected ? "green" : "slate"}>{status.connected ? `Cashfree connected · ${status.tools.length} tools` : "Cashfree not connected"}</Badge>}
     >
       <div className="space-y-3">
+        {!status && <ListSkeleton label="Checking the Cashfree connection" rows={2} />}
         <p className="text-sm text-slate-600">
           An AI agent that checks your Cashfree settlements against what you owe workers, using Cashfree&apos;s MCP server. It only reads; it can&apos;t move money.
         </p>

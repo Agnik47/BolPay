@@ -79,3 +79,14 @@ export function WorkerSkeleton() {
     </main>
   );
 }
+
+/** Rows of placeholder lines, for a list or panel that is still loading. */
+export function ListSkeleton({ label = "Loading", rows = 4 }: { label?: string; rows?: number }) {
+  return (
+    <div role="status" aria-busy="true" aria-label={label} className="mx-auto mt-4 w-full max-w-md space-y-2">
+      {Array.from({ length: rows }, (_, i) => (
+        <span key={i} className="block h-9 animate-pulse rounded-lg bg-slate-200/80" />
+      ))}
+    </div>
+  );
+}

@@ -5,6 +5,19 @@ import { Segmented } from "./ui";
 
 type Workspace = "demo" | "zoho";
 
+/** The sidebar and the phone drawer both show the switch: requests made at the same moment share one answer. */
+let asked: Promise<string | undefined> | null = null;
+function currentDataset() {
+  asked ??= fetch("/api/workspace")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d: { workspace?: string } | null) => d?.workspace)
+    .catch(() => undefined)
+    .finally(() => {
+      asked = null; // share only the request in flight: the next account in this tab must ask afresh
+    });
+  return asked;
+}
+
 /**
  * Switches between the trained demo dataset and the data synced from Zoho People, for the person using it
  * only (a cookie). The two datasets are fully separate (own workers, attendance, payouts, transactions).
@@ -15,13 +28,10 @@ export function WorkspaceSwitch() {
 
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/workspace")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { workspace?: string } | null) => {
-        // Only the demo business has two datasets; a business that signed up itself has just its own.
-        if (!cancelled && (d?.workspace === "demo" || d?.workspace === "zoho")) setWorkspace(d.workspace);
-      })
-      .catch(() => {});
+    void currentDataset().then((d) => {
+      // Only the demo business has two datasets; a business that signed up itself has just its own.
+      if (!cancelled && (d === "demo" || d === "zoho")) setWorkspace(d);
+    });
     return () => {
       cancelled = true;
     };
@@ -48,7 +58,7 @@ export function WorkspaceSwitch() {
 
   if (!workspace) return null;
   return (
-    <div className="mt-4 hidden border-t border-slate-200 px-1 pt-3 md:block">
+    <div className="mt-4 border-t border-slate-200 px-1 pt-3">
       <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">Dataset</p>
       <Segmented<Workspace>
         label="Dataset"

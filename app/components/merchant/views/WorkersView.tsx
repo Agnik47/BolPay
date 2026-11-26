@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "@/app/lib/merchant/store";
 import { useViewer } from "../viewer";
 import { formatDate, formatMoney } from "@/app/lib/merchant/format";
@@ -10,6 +10,8 @@ import { assignTeam, createInvite, listSupervisors } from "@/app/onboarding/acti
 import { useToast } from "../../feedback/Toaster";
 import { isTestVpa } from "@/app/lib/cashfree/test-upi";
 import { Avatar, Badge, Button, Card, EmptyState, Field, fieldClass, inputClass, Notice, PageHeader, StatusBadge, td, th, thRight } from "../ui";
+import { Pager, usePaged } from "../../Pager";
+import { RTable } from "../../RTable";
 
 const EMPTY = { name: "", role: "Delivery Rider", city: "Bengaluru", phone: "", payoutUpi: "", dailyWage: "" };
 
@@ -64,7 +66,7 @@ export function WorkersView() {
   const [city, setCity] = useState("all");
   const workersFile = useRef<HTMLInputElement>(null);
   const deliveriesFile = useRef<HTMLInputElement>(null);
-  const cities = [...new Set(workers.map((w) => w.city).filter(Boolean))].sort();
+  const cities = useMemo(() => [...new Set(workers.map((w) => w.city).filter(Boolean))].sort(), [workers]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [query, setQuery] = useState("");
@@ -73,7 +75,11 @@ export function WorkersView() {
 
   const wage = Number(form.dailyWage);
   const valid = form.name.trim() && form.role.trim() && wage > 0;
-  const shown = workers.filter((w) => (city === "all" || w.city === city) && `${w.name} ${w.role} ${w.city}`.toLowerCase().includes(query.toLowerCase()));
+  const shown = useMemo(() => {
+    const needle = query.toLowerCase();
+    return workers.filter((w) => (city === "all" || w.city === city) && `${w.name} ${w.role} ${w.city}`.toLowerCase().includes(needle));
+  }, [workers, city, query]);
+  const paged = usePaged(shown, 10, `${city}|${query}`);
   const activeCount = workers.filter((w) => w.status === "active").length;
 
   async function onFile(kind: "workers" | "deliveries", file: File | undefined) {
@@ -199,12 +205,12 @@ export function WorkersView() {
         </div>
         {shown.length === 0 ? <EmptyState>No workers match.</EmptyState> : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px]">
+            <RTable className="w-full min-w-[720px]">
               <thead>
                 <tr><th className={th}>Worker</th><th className={th}>Role</th><th className={thRight}>Daily wage</th><th className={th}>UPI ID</th><th className={th}>Joined</th>{isOwner && <th className={th}>Supervisor</th>}<th className={th}>Status</th><th className={th}><span className="sr-only">Actions</span></th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {shown.map((w) => (
+                {paged.rows.map((w) => (
                   <tr key={w.id} className={w.status === "inactive" ? "bg-slate-50/60 [&>td:not(:last-child)]:opacity-55" : ""}>
                     <td className={td}>
                       <div className="flex items-center gap-2.5"><Avatar name={w.name} /><div className="min-w-0"><p className="font-medium text-slate-900">{w.name}</p><p className="text-xs text-slate-500">{w.phone}</p></div></div>
@@ -258,9 +264,10 @@ export function WorkersView() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </RTable>
           </div>
         )}
+        <Pager {...paged} label="workers" />
       </Card>
     </>
   );

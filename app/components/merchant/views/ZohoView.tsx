@@ -6,6 +6,7 @@ import { formatDateTime } from "@/app/lib/merchant/format";
 import { useStore, type Snapshot } from "@/app/lib/merchant/store";
 import { useToast } from "../../feedback/Toaster";
 import { Badge, Button, buttonClass, Card, Notice, PageHeader, Stat, Stats } from "../ui";
+import { ListSkeleton } from "../../Skeleton";
 
 interface Status {
   configured: boolean;
@@ -141,7 +142,7 @@ export function ZohoView() {
         }
       >
         {!status ? (
-          <p className="text-sm text-slate-500">Loading…</p>
+          <ListSkeleton label="Loading Zoho status" rows={3} />
         ) : (
           <div className="space-y-4">
             <p className="text-sm text-slate-600">

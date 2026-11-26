@@ -233,7 +233,7 @@ export function AssistantStage({ role, userName, onClose, onSnapshot }: Props) {
   const pickLabel = PICKER.find((l) => l.code === language)?.label ?? "Auto";
 
   return (
-    <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label="BolPay Voice AI" className="fixed inset-0 z-[70] flex flex-col overflow-hidden bg-[#04161a] text-white outline-none">
+    <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label="BolPay Voice AI" className="fixed inset-0 z-[70] flex flex-col overflow-y-auto overflow-x-hidden bg-[#04161a] text-white outline-none">
       <VoiceBackdrop />
 
       <header className="relative flex items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6">
@@ -286,7 +286,7 @@ export function AssistantStage({ role, userName, onClose, onSnapshot }: Props) {
       {/* Plan waiting for your confirmation: exactly what will happen, never run until you confirm */}
       {confirming && view && (
         <div className={`relative mx-auto mb-2 w-full max-w-xl rounded-2xl border px-4 py-3 ${view.checkpoint ? "border-amber-300/50 bg-amber-300/10" : "border-white/15 bg-white/5"}`} role="group" aria-label="Confirm">
-          <ul className="space-y-1 text-sm text-white/90">
+          <ul className="max-h-[22vh] space-y-1 overflow-y-auto text-sm text-white/90">
             {view.lines.length ? view.lines.map((l) => <li key={l}>{l}</li>) : view.steps.map((st, i) => <li key={i}>{st.summary}</li>)}
           </ul>
           <div className="mt-3 flex gap-2">

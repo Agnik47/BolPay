@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { requireRole } from "@/app/lib/auth/dal";
-import { RelayCard } from "@/app/components/merchant/RelayCard";
-import { FundingAgentCard } from "@/app/components/merchant/FundingAgentCard";
+import { LazyFundingAgentCard, LazyRelayCard } from "@/app/components/Lazy";
 import { ZohoView } from "@/app/components/merchant/views/ZohoView";
 import { ContentSkeleton } from "@/app/components/Skeleton";
 
@@ -26,10 +25,10 @@ async function AuthedIntegrations() {
     <>
       <ZohoView />
       <div className="mt-5">
-        <FundingAgentCard manage />
+        <LazyFundingAgentCard manage />
       </div>
       <div className="mt-5">
-        <RelayCard />
+        <LazyRelayCard />
       </div>
     </>
   );

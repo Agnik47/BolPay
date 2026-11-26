@@ -1,13 +1,15 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/app/lib/merchant/store";
 import { formatDateTime, formatMoney } from "@/app/lib/merchant/format";
 import { playSound } from "@/app/lib/client/sounds";
 import { useToast } from "../../feedback/Toaster";
-import { FundingAgentCard } from "../FundingAgentCard";
+import { LazyFundingAgentCard } from "../../Lazy";
 import { Avatar, Button, Card, EmptyState, linkClass, Notice, PageHeader, Stat, Stats, StatusBadge, td, th, thRight } from "../ui";
+import { Pager, usePaged } from "../../Pager";
+import { RTable } from "../../RTable";
 
 export function PayoutsView() {
   const { payouts, workerById, approvePayouts, rejectPayouts } = useStore();
@@ -22,9 +24,12 @@ export function PayoutsView() {
     setConfirmingState(on);
   };
 
-  const pending = payouts.filter((p) => p.status === "pending");
-  const review = payouts.filter((p) => p.status === "needs_review");
-  const decided = payouts.filter((p) => p.status === "approved" || p.status === "rejected").sort((a, b) => (b.decidedAt ?? "").localeCompare(a.decidedAt ?? ""));
+  const pending = useMemo(() => payouts.filter((p) => p.status === "pending"), [payouts]);
+  const review = useMemo(() => payouts.filter((p) => p.status === "needs_review"), [payouts]);
+  const decided = useMemo(() => payouts.filter((p) => p.status === "approved" || p.status === "rejected").sort((a, b) => (b.decidedAt ?? "").localeCompare(a.decidedAt ?? "")), [payouts]);
+  const pagedReview = usePaged(review, 5);
+  const pagedPending = usePaged(pending);
+  const pagedDecided = usePaged(decided);
   const chosen = pending.filter((p) => selected.has(p.id));
   const chosenTotal = chosen.reduce((s, p) => s + p.amount, 0);
   const missingAccount = chosen.filter((p) => !workerById(p.workerId)?.payoutUpi);
@@ -71,7 +76,7 @@ export function PayoutsView() {
       </Stats>
 
       <div className="mb-5">
-        <FundingAgentCard />
+        <LazyFundingAgentCard />
       </div>
 
       {review.length > 0 && (
@@ -84,7 +89,7 @@ export function PayoutsView() {
             </Notice>
           </div>
           <ul className="divide-y divide-slate-100">
-            {review.map((p) => (
+            {pagedReview.rows.map((p) => (
               <li key={p.id} className="flex items-start gap-2.5 px-4 py-2.5">
                 <Avatar name={workerById(p.workerId)?.name ?? "?"} />
                 <div className="min-w-0">
@@ -96,6 +101,7 @@ export function PayoutsView() {
               </li>
             ))}
           </ul>
+          <Pager {...pagedReview} label="payouts needing review" />
         </Card>
       )}
 
@@ -132,7 +138,12 @@ export function PayoutsView() {
           </EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px]">
+            <label className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5 text-sm text-slate-700 sm:hidden">
+              <input type="checkbox" className="accent-teal-700" checked={allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(pending.map((p) => p.id)))} />
+              Select all {pending.length}
+            </label>
+            {chosen.length > 0 && pagedPending.pages > 1 && <p className="border-b border-slate-100 px-4 py-1.5 text-xs text-slate-500">{chosen.length} of {pending.length} selected, across all pages</p>}
+            <RTable className="w-full min-w-[640px]">
               <thead>
                 <tr>
                   <th className={`${th} w-10`}>
@@ -145,7 +156,7 @@ export function PayoutsView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {pending.map((p) => {
+                {pagedPending.rows.map((p) => {
                   const w = workerById(p.workerId);
                   const b = p.breakdown;
                   return (
@@ -205,18 +216,19 @@ export function PayoutsView() {
                   );
                 })}
               </tbody>
-            </table>
+            </RTable>
           </div>
         )}
+        <Pager {...pagedPending} label="payouts awaiting approval" />
       </Card>
 
       <Card title="Decision history" flush>
         {decided.length === 0 ? <EmptyState>No decisions yet.</EmptyState> : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px]">
+            <RTable className="w-full min-w-[560px]">
               <thead><tr><th className={th}>Worker</th><th className={th}>Period</th><th className={thRight}>Amount</th><th className={th}>Decision</th><th className={th}>When</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
-                {decided.map((p) => (
+                {pagedDecided.rows.map((p) => (
                   <tr key={p.id}>
                     <td className={`${td} font-medium text-slate-900`}>{workerById(p.workerId)?.name}</td>
                     <td className={`${td} whitespace-nowrap`}>{p.periodLabel}</td>
@@ -226,9 +238,10 @@ export function PayoutsView() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </RTable>
           </div>
         )}
+        <Pager {...pagedDecided} label="decisions" />
       </Card>
     </>
   );
