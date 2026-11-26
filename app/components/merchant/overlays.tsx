@@ -6,13 +6,19 @@ import { Button } from "./ui";
 /** Traps Tab inside `root`, closes on Escape, and returns focus to whatever opened it. */
 function useOverlay(open: boolean, onClose: () => void) {
   const root = useRef<HTMLDivElement>(null);
+  // Callers pass a new onClose on every render. It must not be a dependency of the effect below, or each
+  // keystroke would re-run it and yank focus back to the first field (typing a note would edit the amount).
+  const close = useRef(onClose);
+  useEffect(() => {
+    close.current = onClose;
+  });
   useEffect(() => {
     if (!open) return;
     const opener = document.activeElement as HTMLElement | null;
     const node = root.current;
     node?.querySelector<HTMLElement>("[data-autofocus], button, a[href], input, select, textarea")?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") return onClose();
+      if (e.key === "Escape") return close.current();
       if (e.key !== "Tab" || !node) return;
       const f = [...node.querySelectorAll<HTMLElement>("button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])")];
       if (!f.length) return;
@@ -27,7 +33,7 @@ function useOverlay(open: boolean, onClose: () => void) {
       document.body.style.overflow = "";
       opener?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
   return root;
 }
 

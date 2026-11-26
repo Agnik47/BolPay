@@ -233,22 +233,22 @@ export function AssistantStage({ role, userName, onClose, onSnapshot }: Props) {
   const pickLabel = PICKER.find((l) => l.code === language)?.label ?? "Auto";
 
   return (
-    <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label="BolPay Voice AI" className="fixed inset-0 z-[70] flex flex-col overflow-hidden bg-voice-950 text-white outline-none">
+    <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label="BolPay Voice AI" className="fixed inset-0 z-[70] flex flex-col overflow-hidden bg-[#04161a] text-white outline-none">
       <VoiceBackdrop />
 
       <header className="relative flex items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6">
-        <button type="button" onClick={close} aria-label="Close voice screen" className="flex size-10 items-center justify-center rounded-full text-voice-muted transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-voice-cyan"><IconClose className="size-5" /></button>
+        <button type="button" onClick={close} aria-label="Close voice screen" className="flex size-10 items-center justify-center rounded-full text-[#a9dad2] transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-[#65e6d2]"><IconClose className="size-5" /></button>
         <p className="text-sm font-semibold tracking-wide text-white/90">BolPay Voice AI</p>
         <div className="relative flex items-center gap-1">
-          <button type="button" onClick={toggleMute} aria-pressed={muted} aria-label={muted ? "Turn spoken replies on" : "Turn spoken replies off"} className="flex h-10 items-center rounded-full px-3 text-xs font-medium text-voice-muted hover:bg-white/10 hover:text-white">{muted ? "Voice off" : "Voice on"}</button>
+          <button type="button" onClick={toggleMute} aria-pressed={muted} aria-label={muted ? "Turn spoken replies on" : "Turn spoken replies off"} className="flex h-10 items-center rounded-full px-3 text-xs font-medium text-[#a9dad2] hover:bg-white/10 hover:text-white">{muted ? "Voice off" : "Voice on"}</button>
           {worker && (
-            <button type="button" onClick={() => setLangOpen((o) => !o)} disabled={recording || busy} aria-haspopup="listbox" aria-expanded={langOpen} aria-label={`Language: ${pickLabel}. Change`} className="flex h-10 min-w-10 items-center justify-center rounded-full px-3 text-sm font-medium text-voice-muted hover:bg-white/10 hover:text-white disabled:opacity-40">{pickLabel}</button>
+            <button type="button" onClick={() => setLangOpen((o) => !o)} disabled={recording || busy} aria-haspopup="listbox" aria-expanded={langOpen} aria-label={`Language: ${pickLabel}. Change`} className="flex h-10 min-w-10 items-center justify-center rounded-full px-3 text-sm font-medium text-[#a9dad2] hover:bg-white/10 hover:text-white disabled:opacity-40">{pickLabel}</button>
           )}
           {langOpen && (
-            <ul role="listbox" aria-label="Language you will speak" className="absolute right-0 top-11 z-10 w-52 overflow-hidden rounded-xl border border-white/10 bg-voice-900/95 py-1 shadow-2xl backdrop-blur">
+            <ul role="listbox" aria-label="Language you will speak" className="absolute right-0 top-11 z-10 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#071f25]/95 py-1 shadow-2xl backdrop-blur">
               {PICKER.map((l) => (
                 <li key={l.code} role="option" aria-selected={language === l.code}>
-                  <button type="button" onClick={() => pickLanguage(l.code)} className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-white/10 ${language === l.code ? "text-voice-cyan" : "text-white/85"}`}><span>{l.label}</span><span className="text-xs text-voice-muted">{l.name}</span></button>
+                  <button type="button" onClick={() => pickLanguage(l.code)} className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-white/10 ${language === l.code ? "text-[#65e6d2]" : "text-white/85"}`}><span>{l.label}</span><span className="text-xs text-[#a9dad2]">{l.name}</span></button>
                 </li>
               ))}
             </ul>
@@ -257,9 +257,9 @@ export function AssistantStage({ role, userName, onClose, onSnapshot }: Props) {
       </header>
 
       <div className="relative mt-2 px-6 text-center" aria-live="polite">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-voice-bright">{worker ? "Your assistant" : "Workforce assistant"}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#00bfa5]">{worker ? "Your assistant" : "Workforce assistant"}</p>
         {phase === "error" && error ? <p role="alert" className="mx-auto mt-2 max-w-md text-lg font-medium leading-snug text-white">{error}</p> : <h2 className="mt-1.5 text-2xl font-semibold leading-tight tracking-tight sm:text-3xl">{heading}</h2>}
-        {sub && <p className="mt-1 text-sm text-voice-muted">{sub}</p>}
+        {sub && <p className="mt-1 text-sm text-[#a9dad2]">{sub}</p>}
       </div>
 
       <div className="relative min-h-[8rem] flex-1">
@@ -271,16 +271,16 @@ export function AssistantStage({ role, userName, onClose, onSnapshot }: Props) {
       <div ref={scroller} className="relative mx-auto max-h-[30vh] w-full max-w-xl space-y-2 overflow-y-auto px-5 pb-2" aria-label="Conversation">
         {messages.length === 0 && !recording && phase === "idle" && (
           <div className="flex flex-wrap justify-center gap-2 pt-1">
-            {SUGGESTIONS[role].map((s) => <button key={s} type="button" onClick={() => send(s)} className="rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-sm text-voice-muted transition-colors hover:border-voice-cyan hover:text-white">{s}</button>)}
+            {SUGGESTIONS[role].map((s) => <button key={s} type="button" onClick={() => send(s)} className="rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-sm text-[#a9dad2] transition-colors hover:border-[#65e6d2] hover:text-white">{s}</button>)}
           </div>
         )}
         {messages.map((m) => (
-          <p key={m.id} lang={m.lang} className={`animate-[voice-fade-in_0.4s_ease-out] rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed ${m.who === "you" ? "ml-10 bg-white/10 text-right text-white" : "mr-10 bg-voice-teal/25 text-white"}`}>
+          <p key={m.id} lang={m.lang} className={`animate-[voice-fade-in_0.4s_ease-out] rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed ${m.who === "you" ? "ml-10 bg-white/10 text-right text-white" : "mr-10 bg-[#008577]/25 text-white"}`}>
             {m.text}
-            {m.who === "ai" && m.lang && m.lang !== "en" && <span className="mt-0.5 block text-[11px] text-voice-muted">{LANGS[m.lang] ?? m.lang}</span>}
+            {m.who === "ai" && m.lang && m.lang !== "en" && <span className="mt-0.5 block text-[11px] text-[#a9dad2]">{LANGS[m.lang] ?? m.lang}</span>}
           </p>
         ))}
-        {recording && <p className="text-center text-sm italic text-voice-muted">Your words appear here after you stop.</p>}
+        {recording && <p className="text-center text-sm italic text-[#a9dad2]">Your words appear here after you stop.</p>}
       </div>
 
       {/* Plan waiting for your confirmation: exactly what will happen, never run until you confirm */}
@@ -290,39 +290,39 @@ export function AssistantStage({ role, userName, onClose, onSnapshot }: Props) {
             {view.lines.length ? view.lines.map((l) => <li key={l}>{l}</li>) : view.steps.map((st, i) => <li key={i}>{st.summary}</li>)}
           </ul>
           <div className="mt-3 flex gap-2">
-            <button type="button" disabled={busy} onClick={() => void turn({ action: "confirm" })} className="h-10 flex-1 rounded-full bg-voice-bright text-sm font-semibold text-voice-950 disabled:opacity-40">{view.checkpoint ? "Confirm and send" : "Confirm"}</button>
+            <button type="button" disabled={busy} onClick={() => void turn({ action: "confirm" })} className="h-10 flex-1 rounded-full bg-[#00bfa5] text-sm font-semibold text-[#04161a] disabled:opacity-40">{view.checkpoint ? "Confirm and send" : "Confirm"}</button>
             <button type="button" disabled={busy} onClick={() => void turn({ action: "cancel" })} className="h-10 flex-1 rounded-full border border-white/25 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-40">Cancel</button>
           </div>
-          <p className="mt-2 text-center text-[11px] text-voice-muted">You can also say “confirm” or “cancel”.</p>
+          <p className="mt-2 text-center text-[11px] text-[#a9dad2]">You can also say “confirm” or “cancel”.</p>
         </div>
       )}
 
       {typing && (
         <form className="relative mx-auto mb-3 flex w-full max-w-xl gap-2 px-4" onSubmit={(e) => { e.preventDefault(); if (typed.trim() && !busy) { send(typed); setTyped(""); } }}>
-          <input autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} maxLength={600} placeholder="Type your message" aria-label="Type your message" className="h-11 min-w-0 flex-1 rounded-xl border border-white/15 bg-white/10 px-3 text-base text-white placeholder:text-white/40 focus:border-voice-cyan focus:outline-none" />
-          <button type="submit" disabled={!typed.trim() || busy} className="h-11 rounded-xl bg-voice-bright px-4 text-sm font-semibold text-voice-950 disabled:opacity-40">Send</button>
+          <input autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} maxLength={600} placeholder="Type your message" aria-label="Type your message" className="h-11 min-w-0 flex-1 rounded-xl border border-white/15 bg-white/10 px-3 text-base text-white placeholder:text-white/40 focus:border-[#65e6d2] focus:outline-none" />
+          <button type="submit" disabled={!typed.trim() || busy} className="h-11 rounded-xl bg-[#00bfa5] px-4 text-sm font-semibold text-[#04161a] disabled:opacity-40">Send</button>
         </form>
       )}
 
       {phase === "error" && (
         <div className="relative mb-2 flex flex-wrap justify-center gap-2 px-4">
-          <button type="button" onClick={() => { setPhase("idle"); setError(""); }} className="h-10 rounded-full bg-voice-bright px-5 text-sm font-semibold text-voice-950">Try again</button>
+          <button type="button" onClick={() => { setPhase("idle"); setError(""); }} className="h-10 rounded-full bg-[#00bfa5] px-5 text-sm font-semibold text-[#04161a]">Try again</button>
           <button type="button" onClick={() => { setPhase("idle"); setError(""); setTyping(true); }} className="h-10 rounded-full border border-white/20 px-5 text-sm font-medium text-white hover:bg-white/10">Type instead</button>
         </div>
       )}
 
       <footer className="relative flex items-center justify-center gap-8 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-1">
-        <button type="button" onClick={recording ? mic.cancel : newConversation} aria-label={recording ? "Cancel recording" : "Start a new conversation"} title={recording ? "Cancel" : "New conversation"} className="flex size-12 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-voice-cyan">
+        <button type="button" onClick={recording ? mic.cancel : newConversation} aria-label={recording ? "Cancel recording" : "Start a new conversation"} title={recording ? "Cancel" : "New conversation"} className="flex size-12 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-[#65e6d2]">
           {recording ? <IconClose className="size-5" /> : <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M4 12a8 8 0 1 0 2.6-5.9M4 4v4h4" /></svg>}
         </button>
         <div className="relative flex size-24 items-center justify-center">
-          {recording && <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-voice-bright/30" />}
+          {recording && <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-[#00bfa5]/30" />}
           <button type="button" data-sound="off" onClick={recording ? mic.stop : () => { stopSpeaking(); setPhase("idle"); setError(""); setTyping(false); void mic.start(); }} disabled={busy || mic.state === "requesting"} aria-label={recording ? "Stop recording" : "Start recording"}
-            className={`relative flex size-20 items-center justify-center rounded-full text-white shadow-[0_0_40px_-4px_var(--color-voice-bright)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-voice-cyan disabled:opacity-40 disabled:shadow-none ${recording ? "bg-rose-600 hover:bg-rose-700" : "bg-voice-teal hover:bg-voice-deep"}`}>
+            className={`relative flex size-20 items-center justify-center rounded-full text-white shadow-[0_0_40px_-4px_#00bfa5] transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#65e6d2] disabled:opacity-40 disabled:shadow-none ${recording ? "bg-rose-600 hover:bg-rose-700" : "bg-[#008577] hover:bg-[#006b62]"}`}>
             {busy || mic.state === "requesting" ? <span className="size-7 animate-spin rounded-full border-[3px] border-white/30 border-t-white" /> : recording ? <span className="size-6 rounded-md bg-white" /> : <IconMic className="size-9" />}
           </button>
         </div>
-        <button type="button" onClick={() => { if (recording) mic.cancel(); setTyping((t) => !t); }} disabled={busy} aria-label="Type instead" aria-pressed={typing} className={`flex size-12 items-center justify-center rounded-full text-white transition-colors focus-visible:outline-2 focus-visible:outline-voice-cyan disabled:opacity-40 ${typing ? "bg-voice-teal" : "bg-white/10 hover:bg-white/20"}`}>
+        <button type="button" onClick={() => { if (recording) mic.cancel(); setTyping((t) => !t); }} disabled={busy} aria-label="Type instead" aria-pressed={typing} className={`flex size-12 items-center justify-center rounded-full text-white transition-colors focus-visible:outline-2 focus-visible:outline-[#65e6d2] disabled:opacity-40 ${typing ? "bg-[#008577]" : "bg-white/10 hover:bg-white/20"}`}>
           <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="2.5" y="6.5" width="19" height="11" rx="2" /><path d="M6 10h.01M9 10h.01M12 10h.01M15 10h.01M18 10h.01M7 14h10" /></svg>
         </button>
       </footer>

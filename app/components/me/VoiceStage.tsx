@@ -145,28 +145,28 @@ export function VoiceStage({ mode, workerName, language, onLanguage, respond, on
   const shownText = mode === "respond" ? respond?.text ?? "" : transcript;
 
   return (
-    <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label="BolPay Voice AI" className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-voice-950 text-white outline-none">
+    <div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label="BolPay Voice AI" className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-[#04161a] text-white outline-none">
       <VoiceBackdrop />
 
       {/* Top bar */}
       <header className="relative flex items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6">
-        <button type="button" onClick={close} aria-label="Close voice screen" className="flex size-10 items-center justify-center rounded-full text-voice-muted transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-voice-cyan">
+        <button type="button" onClick={close} aria-label="Close voice screen" className="flex size-10 items-center justify-center rounded-full text-[#a9dad2] transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-[#65e6d2]">
           <IconClose className="size-5" />
         </button>
         <p className="text-sm font-semibold tracking-wide text-white/90">BolPay Voice AI</p>
         <div className="relative">
           {mode === "listen" ? (
             <button type="button" onClick={() => setLangOpen((o) => !o)} disabled={recording || busy} aria-haspopup="listbox" aria-expanded={langOpen} aria-label={`Language: ${pickLabel}. Change`}
-              className="flex h-10 min-w-10 items-center justify-center rounded-full px-3 text-sm font-medium text-voice-muted transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-voice-cyan">
+              className="flex h-10 min-w-10 items-center justify-center rounded-full px-3 text-sm font-medium text-[#a9dad2] transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-[#65e6d2]">
               {pickLabel}
             </button>
           ) : <span className="block size-10" />}
           {langOpen && (
-            <ul role="listbox" aria-label="Language you will speak" className="absolute right-0 top-11 z-10 w-52 overflow-hidden rounded-xl border border-white/10 bg-voice-900/95 py-1 shadow-2xl backdrop-blur">
+            <ul role="listbox" aria-label="Language you will speak" className="absolute right-0 top-11 z-10 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#071f25]/95 py-1 shadow-2xl backdrop-blur">
               {PICKER.map((l) => (
                 <li key={l.code} role="option" aria-selected={language === l.code}>
-                  <button type="button" onClick={() => { onLanguage(l.code); setLangOpen(false); }} className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-white/10 ${language === l.code ? "text-voice-cyan" : "text-white/85"}`}>
-                    <span>{l.label}</span><span className="text-xs text-voice-muted">{l.name}</span>
+                  <button type="button" onClick={() => { onLanguage(l.code); setLangOpen(false); }} className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-white/10 ${language === l.code ? "text-[#65e6d2]" : "text-white/85"}`}>
+                    <span>{l.label}</span><span className="text-xs text-[#a9dad2]">{l.name}</span>
                   </button>
                 </li>
               ))}
@@ -177,13 +177,13 @@ export function VoiceStage({ mode, workerName, language, onLanguage, respond, on
 
       {/* Headline */}
       <div className="relative mt-3 px-6 text-center" aria-live="polite">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-voice-bright">Emergency advance</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#00bfa5]">Emergency advance</p>
         {state === "error" ? (
           <p role="alert" className="mx-auto mt-2 max-w-md text-lg font-medium leading-snug text-white">{error}</p>
         ) : (
           <>
             <h2 className="mt-2 text-2xl font-semibold leading-tight tracking-tight text-white sm:text-3xl">{headline}</h2>
-            <p className="mt-1 text-sm text-voice-muted">
+            <p className="mt-1 text-sm text-[#a9dad2]">
               {recording ? `${clock} · Tap the button when you are done` : mode === "listen" && state === "idle" ? `Hi ${workerName}. ${sub}` : sub}
             </p>
           </>
@@ -201,48 +201,48 @@ export function VoiceStage({ mode, workerName, language, onLanguage, respond, on
         {shownText ? (
           <>
             <p key={shownText} lang={transcriptLang || undefined} className="max-h-28 animate-[voice-fade-in_0.5s_ease-out] overflow-y-auto text-lg leading-relaxed text-white sm:text-xl">{shownText}</p>
-            {mode === "listen" && transcriptLang && <p className="mt-1.5 text-xs text-voice-muted">Detected language: {LANGS[transcriptLang] ?? transcriptLang}</p>}
+            {mode === "listen" && transcriptLang && <p className="mt-1.5 text-xs text-[#a9dad2]">Detected language: {LANGS[transcriptLang] ?? transcriptLang}</p>}
           </>
         ) : recording ? (
-          <p className="text-sm italic text-voice-muted">Your words appear here after you stop.</p>
+          <p className="text-sm italic text-[#a9dad2]">Your words appear here after you stop.</p>
         ) : null}
-        {finished && <p className="mt-2 text-sm font-medium text-voice-cyan">Done.</p>}
+        {finished && <p className="mt-2 text-sm font-medium text-[#65e6d2]">Done.</p>}
       </div>
 
       {/* Typed fallback */}
       {typing && mode === "listen" && (
         <form className="relative mx-auto mb-3 flex w-full max-w-xl gap-2 px-4" onSubmit={(e) => { e.preventDefault(); sendTyped(); }}>
           <input autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} maxLength={600} placeholder="Type what happened, e.g. I need ₹2,000 to repair my bike" aria-label="Type your request"
-            className="h-11 min-w-0 flex-1 rounded-xl border border-white/15 bg-white/10 px-3 text-base text-white placeholder:text-white/40 focus:border-voice-cyan focus:outline-none" />
-          <button type="submit" disabled={!typed.trim() || busy} className="h-11 rounded-xl bg-voice-bright px-4 text-sm font-semibold text-voice-950 disabled:opacity-40">Send</button>
+            className="h-11 min-w-0 flex-1 rounded-xl border border-white/15 bg-white/10 px-3 text-base text-white placeholder:text-white/40 focus:border-[#65e6d2] focus:outline-none" />
+          <button type="submit" disabled={!typed.trim() || busy} className="h-11 rounded-xl bg-[#00bfa5] px-4 text-sm font-semibold text-[#04161a] disabled:opacity-40">Send</button>
         </form>
       )}
 
       {/* Error actions */}
       {state === "error" && mode === "listen" && (
         <div className="relative mb-3 flex flex-wrap justify-center gap-2 px-4">
-          {retry ? <button type="button" onClick={() => { const r = retry; setRetry(null); void understand(r.words, r.code, r.source, r.clip); }} className="h-10 rounded-full bg-voice-bright px-5 text-sm font-semibold text-voice-950">Try again</button>
-            : <button type="button" onClick={reset} className="h-10 rounded-full bg-voice-bright px-5 text-sm font-semibold text-voice-950">Speak again</button>}
+          {retry ? <button type="button" onClick={() => { const r = retry; setRetry(null); void understand(r.words, r.code, r.source, r.clip); }} className="h-10 rounded-full bg-[#00bfa5] px-5 text-sm font-semibold text-[#04161a]">Try again</button>
+            : <button type="button" onClick={reset} className="h-10 rounded-full bg-[#00bfa5] px-5 text-sm font-semibold text-[#04161a]">Speak again</button>}
           <button type="button" onClick={() => { reset(); setTyping(true); }} className="h-10 rounded-full border border-white/20 px-5 text-sm font-medium text-white hover:bg-white/10">Type instead</button>
         </div>
       )}
-      {state === "error" && mode === "respond" && <div className="relative mb-3 flex justify-center"><button type="button" onClick={onClose} className="h-10 rounded-full bg-voice-bright px-5 text-sm font-semibold text-voice-950">Close</button></div>}
+      {state === "error" && mode === "respond" && <div className="relative mb-3 flex justify-center"><button type="button" onClick={onClose} className="h-10 rounded-full bg-[#00bfa5] px-5 text-sm font-semibold text-[#04161a]">Close</button></div>}
 
       {/* Controls */}
       {mode === "listen" ? (
         <footer className="relative flex items-center justify-center gap-8 pb-[max(1.75rem,env(safe-area-inset-bottom))] pt-1">
-          <button type="button" onClick={recording ? mic.cancel : close} aria-label={recording ? "Cancel recording" : "Close"} className="flex size-12 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-voice-cyan">
+          <button type="button" onClick={recording ? mic.cancel : close} aria-label={recording ? "Cancel recording" : "Close"} className="flex size-12 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-[#65e6d2]">
             <IconClose className="size-5" />
           </button>
           <div className="relative flex size-24 items-center justify-center">
-            {recording && <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-voice-bright/30" />}
+            {recording && <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-[#00bfa5]/30" />}
             <button type="button" data-sound="off" onClick={recording ? mic.stop : () => { reset(); setTyping(false); void mic.start(); }} disabled={busy || mic.state === "requesting"}
               aria-label={recording ? "Stop recording" : "Start recording"}
-              className={`relative flex size-20 items-center justify-center rounded-full text-white shadow-[0_0_40px_-4px_var(--color-voice-bright)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-voice-cyan disabled:opacity-40 disabled:shadow-none ${recording ? "bg-rose-600 hover:bg-rose-700" : "bg-voice-teal hover:bg-voice-deep"}`}>
+              className={`relative flex size-20 items-center justify-center rounded-full text-white shadow-[0_0_40px_-4px_#00bfa5] transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#65e6d2] disabled:opacity-40 disabled:shadow-none ${recording ? "bg-rose-600 hover:bg-rose-700" : "bg-[#008577] hover:bg-[#006b62]"}`}>
               {busy || mic.state === "requesting" ? <span className="size-7 animate-spin rounded-full border-[3px] border-white/30 border-t-white" /> : recording ? <span className="size-6 rounded-md bg-white" /> : <IconMic className="size-9" />}
             </button>
           </div>
-          <button type="button" onClick={() => { if (recording) mic.cancel(); setTyping((t) => !t); }} disabled={busy} aria-label="Type instead" aria-pressed={typing} className={`flex size-12 items-center justify-center rounded-full text-white transition-colors focus-visible:outline-2 focus-visible:outline-voice-cyan disabled:opacity-40 ${typing ? "bg-voice-teal" : "bg-white/10 hover:bg-white/20"}`}>
+          <button type="button" onClick={() => { if (recording) mic.cancel(); setTyping((t) => !t); }} disabled={busy} aria-label="Type instead" aria-pressed={typing} className={`flex size-12 items-center justify-center rounded-full text-white transition-colors focus-visible:outline-2 focus-visible:outline-[#65e6d2] disabled:opacity-40 ${typing ? "bg-[#008577]" : "bg-white/10 hover:bg-white/20"}`}>
             <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="2.5" y="6.5" width="19" height="11" rx="2" /><path d="M6 10h.01M9 10h.01M12 10h.01M15 10h.01M18 10h.01M7 14h10" /></svg>
           </button>
         </footer>
