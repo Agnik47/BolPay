@@ -7,6 +7,7 @@ import { Badge, Button, Card, Field, inputClass, Notice, StatusBadge } from "../
 import { Pager, usePaged } from "../Pager";
 import { api, JSON_HEADERS, LANG_KEY, LANGS, PICKER, type Preview } from "./advance-shared";
 import { LazyVoiceStage } from "../Lazy";
+import { useAlive, useLatestRequest } from "@/app/lib/client/lifecycle";
 
 interface Limit { available: number; earnedLimit: number; outstanding: number; maxAmount: number; percent: number }
 interface Req { id: string; amount: number; reasonText: string; status: string; statusNote?: string; createdAt: string; owed?: number; recovered?: number }
@@ -43,10 +44,22 @@ export function AdvanceCard({ workerName }: { workerName: string }) {
 
   const pagedRequests = usePaged(state?.requests ?? NO_REQUESTS, 5);
 
-  const refresh = useCallback(async () => {
-    const r = await api<State>("/api/me/advance");
-    if (r.ok) { setState(r.data); setLoadError(""); } else setLoadError(r.error);
+  const nextLoad = useLatestRequest();
+  const alive = useAlive();
+  const spokenUrl = useRef<string | null>(null);
+  // Leaving the page stops any reply that is playing and frees its audio.
+  useEffect(() => () => {
+    audio.current?.pause();
+    audio.current = null;
+    if (spokenUrl.current) URL.revokeObjectURL(spokenUrl.current);
   }, []);
+
+  const refresh = useCallback(async () => {
+    const signal = nextLoad();
+    const r = await api<State>("/api/me/advance", { signal });
+    if (signal.aborted) return;
+    if (r.ok) { setState(r.data); setLoadError(""); } else setLoadError(r.error);
+  }, [nextLoad]);
   useEffect(() => {
     const t = setTimeout(() => {
       void refresh();
@@ -95,6 +108,7 @@ export function AdvanceCard({ workerName }: { workerName: string }) {
 
   async function play(url: string) {
     audio.current?.pause();
+    setSpeaking(false);
     const a = new Audio(url);
     audio.current = a;
     await a.play();
@@ -106,9 +120,14 @@ export function AdvanceCard({ workerName }: { workerName: string }) {
     try {
       const res = await fetch("/api/me/advance/speak", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ text: words, language }) });
       if (!res.ok) throw new Error();
-      const url = URL.createObjectURL(await res.blob());
+      const clip = await res.blob();
+      if (!alive.current) return;
+      if (spokenUrl.current) URL.revokeObjectURL(spokenUrl.current);
+      audio.current?.pause();
+      const url = URL.createObjectURL(clip);
+      spokenUrl.current = url;
       const a = new Audio(url);
-      a.onended = a.onerror = () => { URL.revokeObjectURL(url); setSpeaking(false); };
+      a.onended = a.onerror = () => { URL.revokeObjectURL(url); spokenUrl.current = null; setSpeaking(false); };
       audio.current = a;
       await a.play();
     } catch {

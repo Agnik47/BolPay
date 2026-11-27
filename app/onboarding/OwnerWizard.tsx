@@ -10,6 +10,7 @@ import { Actions, Celebrate, Chip, ErrorText, InviteLinkCard, LineInput, Pill, S
 import { Stage } from "@/app/components/onboarding/Stage";
 import { createBusiness, createInvite, finishOnboarding, saveSetup, setOnboardingStep } from "./actions";
 import { TeamStep } from "./TeamStep";
+import { useAlive } from "@/app/lib/client/lifecycle";
 
 type Cycle = (typeof CYCLES)[number]["value"];
 const TYPE_ART = { delivery: <ParcelArt />, retail: <ShopArt />, factory: <FactoryArt />, construction: <SiteArt />, other: <ToolboxArt /> } as const;
@@ -233,12 +234,15 @@ function VoiceStep({ onNext }: { onNext: () => void }) {
   const [level, setLevel] = useState(0);
   const cleanup = useRef<() => void>(() => {});
 
+  const alive = useAlive();
   useEffect(() => () => cleanup.current(), []);
 
   async function start() {
+    cleanup.current(); // pressing Start twice must not leave the first microphone open
     if (!navigator.mediaDevices?.getUserMedia) return setState("unsupported");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!alive.current) return stream.getTracks().forEach((t) => t.stop()); // moved on while the prompt was open
       const ctx = new AudioContext();
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;

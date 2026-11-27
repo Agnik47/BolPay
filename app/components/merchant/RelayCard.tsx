@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, Notice } from "./ui";
 import { ListSkeleton } from "../Skeleton";
+import { useLatestRequest } from "@/app/lib/client/lifecycle";
 
 /** Sends a payroll summary to the Cashfree Relay "Payroll alert" agent through its Inbound Webhook. */
 export function RelayCard() {
@@ -10,11 +11,17 @@ export function RelayCard() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
+  const nextLoad = useLatestRequest();
   const load = useCallback(async () => {
-    const res = await fetch("/api/relay/events");
-    const d = (await res.json().catch(() => ({}))) as { relay?: { configured: boolean; event: { summary: string; period: string } } };
-    if (res.ok && d.relay) setState(d.relay);
-  }, []);
+    const signal = nextLoad();
+    try {
+      const res = await fetch("/api/relay/events", { signal });
+      const d = (await res.json().catch(() => ({}))) as { relay?: { configured: boolean; event: { summary: string; period: string } } };
+      if (!signal.aborted && res.ok && d.relay) setState(d.relay);
+    } catch {
+      /* unreachable or cancelled: the card keeps what it had */
+    }
+  }, [nextLoad]);
   useEffect(() => {
     // Initial load from the server.
     // eslint-disable-next-line react-hooks/set-state-in-effect

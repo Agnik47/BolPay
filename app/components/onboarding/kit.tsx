@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { IconAlert, IconDone } from "@/app/components/icons";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -268,6 +268,8 @@ export function Celebrate() {
 /** A link the owner hands out: shown with Copy and a WhatsApp share. */
 export function InviteLinkCard({ path, name, businessLabel }: { path: string; name: string; businessLabel?: string }) {
   const [copied, setCopied] = useState(false);
+  const reset = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(reset.current), []);
   const url = typeof window === "undefined" ? path : `${window.location.origin}${path}`;
   const text = `${name ? `Hi ${name.split(" ")[0]}, ` : ""}you've been invited to ${businessLabel || "our team"} on BolPay. Set up your login here: ${url}`;
 
@@ -275,7 +277,8 @@ export function InviteLinkCard({ path, name, businessLabel }: { path: string; na
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      clearTimeout(reset.current);
+      reset.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       /* clipboard blocked: the link is still selectable */
     }

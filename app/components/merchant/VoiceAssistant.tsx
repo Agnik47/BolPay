@@ -181,7 +181,38 @@ export function VoiceAssistant() {
     stream.current?.getTracks().forEach((t) => t.stop());
     stream.current = null;
   };
-  useEffect(() => stopStream, []);
+  // Leaving while recording must not transcribe and run the command afterwards.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      const rec = recorder.current;
+      if (rec) {
+        rec.onstop = null;
+        rec.ondataavailable = null;
+        if (rec.state === "recording") rec.stop();
+      }
+      stopStream();
+    };
+  }, []);
+
+  // Closing the panel cancels a recording in progress: the microphone goes off and nothing is sent.
+  const micSession = useRef(0);
+  useEffect(() => {
+    if (!open) return;
+    return () => {
+      micSession.current += 1; // also catches a permission prompt that is still open
+      const rec = recorder.current;
+      if (rec?.state !== "recording") return;
+      rec.onstop = null;
+      rec.ondataavailable = null;
+      rec.stop();
+      stopStream();
+      setPhase("idle");
+      setLevel(0);
+    };
+  }, [open]);
 
   // Restore the conversation after a reload: the pending question or plan lives on the server.
   useEffect(() => {
@@ -191,7 +222,8 @@ export function VoiceAssistant() {
       return;
     }
     let cancelled = false;
-    void fetch(`/api/voice/turn?sessionId=${encodeURIComponent(saved.sessionId)}`)
+    const ctl = new AbortController();
+    void fetch(`/api/voice/turn?sessionId=${encodeURIComponent(saved.sessionId)}`, { signal: ctl.signal })
       .then(async (res) => {
         if (cancelled) return;
         if (res.ok) {
@@ -206,6 +238,7 @@ export function VoiceAssistant() {
       });
     return () => {
       cancelled = true;
+      ctl.abort();
     };
   }, []);
 
@@ -271,8 +304,11 @@ export function VoiceAssistant() {
       setNotice("Recording isn't supported in this browser. Type the command instead.");
       return;
     }
+    const session = micSession.current;
     try {
-      stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!alive.current || session !== micSession.current) return mic.getTracks().forEach((t) => t.stop()); // closed while the permission prompt was open
+      stream.current = mic;
     } catch {
       setNotice("Microphone access was blocked. Allow it in your browser, or type the command.");
       return;
@@ -288,6 +324,7 @@ export function VoiceAssistant() {
       const body = new FormData();
       body.append("audio", blob, "command.webm");
       const res = await transcribe(body);
+      if (!alive.current) return;
       setPhase("idle");
       if (!res.ok) {
         playSound("error");

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Badge, Button, buttonClass, Card, inputClass, Notice } from "./ui";
 import { ListSkeleton } from "../Skeleton";
+import { useLatestRequest } from "@/app/lib/client/lifecycle";
 
 interface McpStatus {
   connected: boolean;
@@ -35,11 +36,17 @@ export function FundingAgentCard({ manage = false }: { manage?: boolean }) {
   const [out, setOut] = useState<Answer | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  const nextLoad = useLatestRequest();
   const load = useCallback(async () => {
-    const res = await fetch("/api/cashfree-mcp/status");
-    const d = (await res.json().catch(() => ({}))) as { cashfreeMcp?: McpStatus };
-    if (res.ok && d.cashfreeMcp) setStatus(d.cashfreeMcp);
-  }, []);
+    const signal = nextLoad();
+    try {
+      const res = await fetch("/api/cashfree-mcp/status", { signal });
+      const d = (await res.json().catch(() => ({}))) as { cashfreeMcp?: McpStatus };
+      if (!signal.aborted && res.ok && d.cashfreeMcp) setStatus(d.cashfreeMcp);
+    } catch {
+      /* unreachable or cancelled: the card keeps what it had */
+    }
+  }, [nextLoad]);
   useEffect(() => {
     // Initial load of the connection state from the server.
     // eslint-disable-next-line react-hooks/set-state-in-effect

@@ -11,6 +11,7 @@ import { useViewer } from "../viewer";
 import { LazyAdvancePolicyPanel } from "../../Lazy";
 import { Avatar, Badge, Button, Card, EmptyState, EnvBadge, inputClass, Notice, PageHeader, Segmented, Stat, Stats, StatusBadge } from "../ui";
 import { Pager, usePaged } from "../../Pager";
+import { useLatestRequest } from "@/app/lib/client/lifecycle";
 
 type StaffAdvance = Omit<AdvanceRequest, "idempotencyKey"> & {
   worker: { id: string; name: string; city: string; role: string; dailyWage: number; hasUpi: boolean } | null;
@@ -73,19 +74,23 @@ export function AdvancesView() {
   const [busy, setBusy] = useState(false);
   const [asOf, setAsOf] = useState(0); // when the list was fetched (keeps Date.now() out of render)
 
+  const nextLoad = useLatestRequest();
   const load = useCallback(async () => {
+    const signal = nextLoad();
     try {
-      const res = await fetch("/api/advances", { cache: "no-store" });
+      const res = await fetch("/api/advances", { cache: "no-store", signal });
       const d = (await res.json().catch(() => ({}))) as { advances?: StaffAdvance[]; error?: string };
+      if (signal.aborted) return;
       if (!res.ok || !d.advances) throw new Error(d.error ?? "Could not load advance requests.");
       setItems(d.advances);
       setAsOf(Date.now());
       setError("");
     } catch (e) {
+      if (signal.aborted) return;
       setError(e instanceof Error ? e.message : "Could not load advance requests.");
       setItems((p) => p ?? []);
     }
-  }, []);
+  }, [nextLoad]);
   useEffect(() => {
     const t = setTimeout(() => void load(), 0);
     return () => clearTimeout(t);
@@ -135,7 +140,10 @@ export function AdvancesView() {
       toast({ tone: "error", title: "Couldn't complete that", description: r.error });
       return void load();
     }
-    if (r.data.advances) setItems(r.data.advances);
+    if (r.data.advances) {
+      nextLoad(); // a list requested before this action is now out of date
+      setItems(r.data.advances);
+    }
     if (r.data.state) applySnapshot(r.data.state);
     const name = target.worker?.name ?? "the worker";
     if (kind === "approve") toast({ tone: "success", title: `Transfer requested for ${name}`, description: `${formatMoney(approvedNum)} sent to Cashfree. It counts as paid only when Cashfree confirms it.`, action: { label: "Track in Transactions", href: "/transactions" } });

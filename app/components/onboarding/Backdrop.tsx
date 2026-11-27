@@ -19,9 +19,14 @@ export function Backdrop() {
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // The drift re-creates itself from onComplete, outside what ctx.revert() tracks, so it is stopped by hand.
+    let stopped = false;
+    const blobs: HTMLElement[] = [];
     const ctx = gsap.context(() => {
       gsap.utils.toArray<HTMLElement>("[data-blob]").forEach((el) => {
+        blobs.push(el);
         const drift = () =>
+          !stopped &&
           gsap.to(el, {
             x: gsap.utils.random(-90, 90),
             y: gsap.utils.random(-70, 70),
@@ -33,7 +38,11 @@ export function Backdrop() {
         drift();
       });
     }, root);
-    return () => ctx.revert();
+    return () => {
+      stopped = true;
+      gsap.killTweensOf(blobs);
+      ctx.revert();
+    };
   }, []);
 
   return (

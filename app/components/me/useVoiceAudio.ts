@@ -53,7 +53,16 @@ export function useMicRecorder({ levelRef, onRecorded, onError }: {
     ctx.current = null;
     levelRef.current = 0;
   }, [levelRef]);
-  useEffect(() => () => { cancelled.current = true; if (recorder.current?.state === "recording") recorder.current.stop(); release(); }, [release]);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      cancelled.current = true;
+      if (recorder.current?.state === "recording") recorder.current.stop();
+      release();
+    };
+  }, [release]);
 
   const start = useCallback(async () => {
     if (stateRef.current !== "idle") return; // one recording at a time
@@ -62,9 +71,12 @@ export function useMicRecorder({ levelRef, onRecorded, onError }: {
     try {
       stream.current = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     } catch (err) {
+      if (!alive.current) return;
       set("idle");
       return cb.current.onError(micError(err));
     }
+    // The screen was closed while the permission prompt was open: turn the microphone straight off.
+    if (!alive.current) return release();
     chunks.current = [];
     cancelled.current = false;
     const rec = new MediaRecorder(stream.current);
@@ -124,7 +136,9 @@ export function playWithLevel(url: string, levelRef: MutableRefObject<number>): 
   let raf = 0;
   let c: AudioContext | null = null;
   const finish = () => { cancelAnimationFrame(raf); levelRef.current = 0; void c?.close().catch(() => {}); c = null; };
+  let settle = () => {};
   const done = new Promise<void>((resolve, reject) => {
+    settle = resolve;
     audio.onended = () => { finish(); resolve(); };
     audio.onerror = () => { finish(); reject(new Error("playback")); };
     try {
@@ -149,5 +163,6 @@ export function playWithLevel(url: string, levelRef: MutableRefObject<number>): 
     } catch { /* plays without the analyser */ }
     void audio.play().catch((e) => { finish(); reject(e); });
   });
-  return { done, stop: () => { audio.pause(); finish(); } };
+  // Stopping also settles `done`: a paused clip never fires "ended", so callers would never free its URL.
+  return { done, stop: () => { audio.pause(); finish(); settle(); } };
 }

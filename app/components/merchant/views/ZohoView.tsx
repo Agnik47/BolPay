@@ -7,6 +7,7 @@ import { useStore, type Snapshot } from "@/app/lib/merchant/store";
 import { useToast } from "../../feedback/Toaster";
 import { Badge, Button, buttonClass, Card, Notice, PageHeader, Stat, Stats } from "../ui";
 import { ListSkeleton } from "../../Skeleton";
+import { useLatestRequest } from "@/app/lib/client/lifecycle";
 
 interface Status {
   configured: boolean;
@@ -43,12 +44,19 @@ export function ZohoView() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"sync" | "disconnect" | "open" | "emails" | null>(null);
 
+  const nextLoad = useLatestRequest();
   const load = useCallback(async () => {
-    const res = await fetch("/api/zoho/status");
-    const d = (await res.json().catch(() => ({}))) as { zoho?: Status; error?: string };
-    if (res.ok && d.zoho) setStatus(d.zoho);
-    else setLoadError(d.error ?? "Could not load the Zoho status.");
-  }, []);
+    const signal = nextLoad();
+    try {
+      const res = await fetch("/api/zoho/status", { signal });
+      const d = (await res.json().catch(() => ({}))) as { zoho?: Status; error?: string };
+      if (signal.aborted) return;
+      if (res.ok && d.zoho) setStatus(d.zoho);
+      else setLoadError(d.error ?? "Could not load the Zoho status.");
+    } catch {
+      if (!signal.aborted) setLoadError("Could not load the Zoho status.");
+    }
+  }, [nextLoad]);
 
   useEffect(() => {
     // Initial load; the fetch is the external system being synced with.

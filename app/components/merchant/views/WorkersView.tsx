@@ -28,7 +28,14 @@ export function WorkersView() {
   const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
-    if (isOwner) void listSupervisors().then(setSupervisors);
+    if (!isOwner) return;
+    let off = false;
+    void listSupervisors().then((s) => {
+      if (!off) setSupervisors(s);
+    });
+    return () => {
+      off = true;
+    };
   }, [isOwner]);
 
   async function makeInvite(input: { role: "supervisor" | "worker"; workerId?: string; name?: string }) {

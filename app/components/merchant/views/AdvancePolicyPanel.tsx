@@ -6,15 +6,16 @@ import type { AdvancePolicy, Delegation } from "@/app/lib/merchant/types";
 import { useToast } from "../../feedback/Toaster";
 import { ConfirmDialog } from "../overlays";
 import { Badge, Button, Card, Field, inputClass, Notice, Switch } from "../ui";
+import { useLatestRequest } from "@/app/lib/client/lifecycle";
 
 type DelegationRow = Delegation & { state: "active" | "scheduled" | "expired" | "revoked" };
 interface State { policy: AdvancePolicy; delegations: DelegationRow[]; live: boolean; autonomyAllowed: boolean }
 
 const TONE = { active: "green", scheduled: "blue", expired: "slate", revoked: "red" } as const;
 
-async function call(method: string, url: string, body?: unknown) {
+async function call(method: string, url: string, body?: unknown, signal?: AbortSignal) {
   try {
-    const res = await fetch(url, { method, headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+    const res = await fetch(url, { method, headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined, cache: "no-store", signal });
     const data = (await res.json().catch(() => ({}))) as Partial<State> & { error?: string; advances?: unknown };
     return res.ok ? { ok: true as const, data } : { ok: false as const, error: data.error ?? "Something went wrong." };
   } catch {
@@ -44,10 +45,13 @@ export function AdvancePolicyPanel({ onChanged }: { onChanged: () => void }) {
     setPol({ percentLimit: String(s.policy.percentLimit), maxAmount: String(s.policy.maxAmount), minServiceDays: String(s.policy.minServiceDays), maxOutstanding: String(s.policy.maxOutstanding), expireAfterHours: String(s.policy.expireAfterHours), maxRecoveryPercentOfPayout: String(s.policy.maxRecoveryPercentOfPayout) });
     setHuman(s.policy.requireHumanApproval);
   }, []);
+  const nextLoad = useLatestRequest();
   const load = useCallback(async () => {
-    const r = await call("GET", "/api/advances/delegations");
+    const signal = nextLoad();
+    const r = await call("GET", "/api/advances/delegations", undefined, signal);
+    if (signal.aborted) return;
     if (r.ok && r.data.policy) { adopt(r.data as State); setError(""); } else if (!r.ok) setError(r.error);
-  }, [adopt]);
+  }, [adopt, nextLoad]);
   useEffect(() => {
     const t = setTimeout(() => void load(), 0);
     return () => clearTimeout(t);
@@ -58,6 +62,7 @@ export function AdvancePolicyPanel({ onChanged }: { onChanged: () => void }) {
     const r = await call("PUT", "/api/advances/policy", { ...Object.fromEntries(Object.entries(pol).map(([k, v]) => [k, Number(v)])), requireHumanApproval: human });
     setBusy(false);
     if (!r.ok) return toast({ tone: "error", title: "Policy not saved", description: r.error });
+    nextLoad();
     adopt(r.data as State);
     toast({ tone: "success", sound: false, title: "Policy saved", description: "It applies to new checks straight away." });
   }
@@ -67,6 +72,7 @@ export function AdvancePolicyPanel({ onChanged }: { onChanged: () => void }) {
     const r = await call("POST", "/api/advances/delegations", { maxPerRequest: Number(del.maxPerRequest), maxDailyTotal: Number(del.maxDailyTotal), maxMonthlyTotal: Number(del.maxMonthlyTotal), expiresAt: new Date(del.expiresAt).toISOString(), autonomous: del.autonomous, note: del.note });
     setBusy(false);
     if (!r.ok) return toast({ tone: "error", title: "Delegation not created", description: r.error });
+    nextLoad();
     adopt(r.data as State);
     onChanged();
     toast({ tone: "success", title: "Delegation started", description: del.autonomous && !human ? "The Manager Agent may approve within these limits." : "The Manager Agent will recommend; a person still approves." });
@@ -79,6 +85,7 @@ export function AdvancePolicyPanel({ onChanged }: { onChanged: () => void }) {
     setBusy(false);
     setRevoke(null);
     if (!r.ok) return toast({ tone: "error", title: "Couldn't revoke", description: r.error });
+    nextLoad();
     adopt(r.data as State);
     onChanged();
     toast({ tone: "info", sound: false, title: "Delegation revoked", description: "The Manager Agent has no authority now." });

@@ -62,6 +62,7 @@ export function Hero() {
     }
 
     let line = 0;
+    let typing: gsap.core.Tween | null = null; // created later by the timeline, so not tracked by ctx
     const ctx = gsap.context(() => {
       gsap.set("[data-coin]", { opacity: 0 });
       gsap.set("[data-chip]", { opacity: 0, scale: 0.4, transformOrigin: "50% 100%" });
@@ -71,14 +72,15 @@ export function Hero() {
       const type = (text: string, lang: string) => {
         t.textContent = lang;
         const o = { n: 0 };
-        return gsap.to(o, {
+        typing?.kill();
+        return (typing = gsap.to(o, {
           n: text.length,
           duration: Math.min(1.5, text.length * 0.045),
           ease: "none",
           onUpdate: () => {
             q.textContent = text.slice(0, Math.round(o.n));
           },
-        });
+        }));
       };
 
       const flight = (i: number) => {
@@ -128,7 +130,10 @@ export function Hero() {
       }, 7);
     }, svg);
 
-    return () => ctx.revert();
+    return () => {
+      typing?.kill();
+      ctx.revert();
+    };
   }, []);
 
   return (

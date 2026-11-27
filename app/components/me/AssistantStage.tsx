@@ -96,7 +96,9 @@ export function AssistantStage({ role, userName, onClose, onSnapshot }: Props) {
   const key = `bolpay.assistant.session.${role}`;
   const add = (m: Omit<Message, "id">) => setMessages((all) => [...all.slice(-11), { ...m, id: nextId.current++ }]);
 
+  const speechSeq = useRef(0);
   const stopSpeaking = useCallback(() => {
+    speechSeq.current += 1; // a reply still being fetched must not start playing later
     playback.current?.stop();
     playback.current = null;
     setSpeaking(false);
@@ -106,11 +108,14 @@ export function AssistantStage({ role, userName, onClose, onSnapshot }: Props) {
   const speak = useCallback(async (text: string, lang: string) => {
     if (mutedRef.current || !text.trim()) return;
     stopSpeaking();
+    const seq = speechSeq.current;
     try {
       const url = worker ? "/api/me/advance/speak" : "/api/voice-output";
       const res = await fetch(url, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ text: spokenPart(text, SPEAK_LIMIT[role]), language: lang }), signal: abort.current?.signal });
       if (!res.ok || !alive.current) return; // 422 means no voice for this language: text only
-      const objectUrl = URL.createObjectURL(await res.blob());
+      const clip = await res.blob();
+      if (seq !== speechSeq.current || !alive.current) return;
+      const objectUrl = URL.createObjectURL(clip);
       const p = playWithLevel(objectUrl, levelRef);
       playback.current = p;
       setSpeaking(true);
@@ -192,7 +197,7 @@ export function AssistantStage({ role, userName, onClose, onSnapshot }: Props) {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     dialog.current?.focus();
-    return () => { alive.current = false; abort.current?.abort(); playback.current?.stop(); document.body.style.overflow = prev; };
+    return () => { alive.current = false; abort.current?.abort(); speechSeq.current += 1; playback.current?.stop(); document.body.style.overflow = prev; };
   }, [key]);
   useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" }); }, [messages, view]);
 

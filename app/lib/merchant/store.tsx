@@ -83,10 +83,11 @@ const POLL_MS = 4000;
 
 type ApiResult = { state?: Snapshot; error?: string; created?: number; needsReview?: number; skipped?: number; import?: { imported: number; errors: string[] } };
 
-async function request(method: string, path: string, body?: unknown): Promise<ApiResult & { ok: boolean }> {
+async function request(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<ApiResult & { ok: boolean }> {
   try {
     const res = await fetch(path, {
       method,
+      signal,
       headers: body === undefined ? undefined : { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
       // Small attendance writes must still arrive if the page is closed right after typing.
@@ -129,15 +130,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [apply]);
 
   useEffect(() => {
-    let cancelled = false;
-    void request("GET", "/api/state").then((r) => {
-      if (cancelled) return;
+    const ctl = new AbortController();
+    void request("GET", "/api/state", undefined, ctl.signal).then((r) => {
+      if (ctl.signal.aborted) return;
       apply(r);
       if (r.ok) setLoaded(true);
     });
-    return () => {
-      cancelled = true;
-    };
+    return () => ctl.abort();
   }, [apply]);
 
   // Optimistic writes go through one queue so they reach the server in the order they were made.
@@ -190,11 +189,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const hasProcessing = state.transactions.some((t) => t.status === "processing");
   useEffect(() => {
     if (!hasProcessing) return;
+    // One check at a time, so a slow answer can't arrive after a newer one; stopping also drops the one in flight.
+    const ctl = new AbortController();
+    let busy = false;
     const handle = setInterval(async () => {
-      const r = await request("POST", "/api/payouts/sync");
-      if (r.state) replace(r.state);
+      if (busy) return;
+      busy = true;
+      const r = await request("POST", "/api/payouts/sync", undefined, ctl.signal);
+      busy = false;
+      if (!ctl.signal.aborted && r.state) replace(r.state);
     }, POLL_MS);
-    return () => clearInterval(handle);
+    return () => {
+      clearInterval(handle);
+      ctl.abort();
+    };
   }, [hasProcessing, replace]);
 
   const store = useMemo<Store>(() => {
