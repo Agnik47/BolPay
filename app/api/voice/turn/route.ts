@@ -16,7 +16,7 @@ async function signedIn() {
 
 const MAX_TEXT = 600;
 
-const ctxOf = (s: SessionContext) => ({ role: s.role, name: s.displayName, workerId: s.workerRef });
+const ctxOf = (s: SessionContext) => ({ role: s.role, name: s.displayName, workerId: s.workerRef, userId: s.userId });
 
 /**
  * POST { sessionId?, text?, action?: "confirm" | "cancel", dryRun?, reset? }

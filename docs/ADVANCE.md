@@ -77,7 +77,7 @@ Runs on submission and on a timer sweep. Output per request: `approve | recommen
 - `/me`: Emergency Advance card (limit, mic and text, interpreted amount and reason with correction, recovery disclosure, request history and live status).
 - `/advances` (new, in the Payments nav): queue for staff (supervisor can recommend) with worker, amount, reason, original transcript, eligibility snapshot, outstanding balance; owner approve/reject with a confirm dialog showing the exact amount, Cashfree/UPI and environment. A second tab for policy and delegation (owner).
 - Transactions: `Advance` badge and a kind filter. Dashboard: advance totals separate from payroll "Paid out". Payouts: deduction column. Audit Log: actor and target.
-- Voice assistant: advances are excluded from the planner catalogue in v1, so its money checkpoint surface doesn't change.
+- Voice assistant: a worker can request an advance; an owner can approve or reject one (`approve_advance`, `reject_advance`; see VOICE.md).
 - Notifications are in-app only (no SMS or push exists). "Paid" is shown and spoken only after Cashfree confirms.
 
 **Known gap:** `/me` and worker requests run on the Demo dataset today, so Zoho-dataset workers can't use this until worker sessions carry a dataset.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useStore, type Snapshot } from "@/app/lib/merchant/store";
 import { formatDateTime, formatMoney } from "@/app/lib/merchant/format";
 import type { AdvanceEligibility, AdvanceRequest } from "@/app/lib/merchant/types";
@@ -96,13 +96,11 @@ export function AdvancesView() {
     return () => clearTimeout(t);
   }, [load]);
 
-  // The store already polls Cashfree while a transfer is processing; reload requests whenever an advance transfer changes.
-  const sig = useMemo(() => transactions.filter((t) => t.kind === "advance").map((t) => `${t.id}:${t.status}`).join(","), [transactions]);
+  // Reload whenever the store takes a new server snapshot: a payment status poll, or a decision made by voice.
   useEffect(() => {
-    if (!sig) return;
     const t = setTimeout(() => void load(), 0);
     return () => clearTimeout(t);
-  }, [sig, load]);
+  }, [transactions, load]);
 
   const list = items ?? [];
   const pending = list.filter((a) => a.status === "pending_review");

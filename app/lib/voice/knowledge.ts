@@ -34,9 +34,9 @@ const IDENTITY_WORKER =
 
 const CAPABILITIES: Record<CatalogRole, string> = {
   owner:
-    "I can mark attendance, record overtime and deliveries, calculate and approve payouts, retry failed payments, add or edit workers, change pay rules, open screens, and answer questions about workers, pay, attendance and payments. Anything that moves money asks you to confirm first.",
+    "I can mark attendance, record overtime and deliveries, calculate and approve payouts, approve or reject a worker's emergency advance, retry failed payments, add or edit workers, change pay rules, open screens, and answer questions about workers, pay, attendance and payments. Anything that moves money asks you to confirm first.",
   supervisor:
-    "I can mark attendance, record overtime and deliveries, calculate pay for your team, open screens, and answer questions about your team. Approving payouts, editing workers and changing pay rules are for the owner.",
+    "I can mark attendance, record overtime and deliveries, calculate pay for your team, open screens, and answer questions about your team. Approving payouts and advances, editing workers and changing pay rules are for the owner.",
   worker:
     "I can tell you how much you have earned this period, check your emergency advance limit and request status, send an advance request to your employer, and explain how BolPay works. I can't see or change anyone else's information.",
 };

@@ -62,6 +62,8 @@ const HELP: { title: string; ownerOnly?: boolean; items: { say: string; ownerOnl
       { say: "Calculate pay for Bengaluru riders with at least 20 deliveries" },
       { say: "Approve all pending payouts", ownerOnly: true },
       { say: "Reject Ravi's payout", ownerOnly: true },
+      { say: "Approve Ravi's advance", ownerOnly: true },
+      { say: "Reject Ravi's advance", ownerOnly: true },
       { say: "Retry failed payments", ownerOnly: true },
       { say: "Refresh payment status", ownerOnly: true },
     ],

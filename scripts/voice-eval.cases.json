@@ -1107,6 +1107,55 @@
           }
         }
       ]
+    },
+    {
+      "name": "approving an advance with none waiting says so",
+      "turns": [
+        {
+          "say": "approve Priya Nair's advance",
+          "expect": {
+            "outcome": "rejected",
+            "speechIncludes": [
+              "advance"
+            ],
+            "speechExcludes": [
+              "payroll payout"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "rejecting an advance with none waiting says so",
+      "turns": [
+        {
+          "say": "reject Priya Nair's advance request",
+          "expect": {
+            "outcome": "rejected",
+            "speechIncludes": [
+              "advance"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "an advance in Hindi never becomes a payroll approval",
+      "turns": [
+        {
+          "say": "प्रिया का एडवांस अप्रूव कर दो",
+          "expect": {
+            "outcomeAny": [
+              "rejected",
+              "clarified"
+            ],
+            "notOutcome": [
+              "planned",
+              "executed"
+            ]
+          }
+        }
+      ]
     }
   ]
 }

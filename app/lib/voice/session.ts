@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import { IntentModelError } from "@/app/lib/ai/intent";
 import { translateReply } from "@/app/lib/ai/translate";
 import { logAudit } from "@/app/lib/server/db";
-import { reconcileAmount } from "@/app/lib/advance/amounts";
-import { eligibilityFor } from "@/app/lib/server/advance-service";
+import { detectAmounts, reconcileAmount } from "@/app/lib/advance/amounts";
+import { eligibilityFor, staffAdvances } from "@/app/lib/server/advance-service";
 import { getViewDb } from "@/app/lib/server/db";
 import { allowedFor, describePreview, previewMoney, runPlan, type StepOutcome, type VoiceCtx } from "./executor";
 import { SCOPE_REPLY } from "./knowledge";
@@ -170,7 +170,7 @@ async function present(s: Session, steps: ResolvedStep[], note: string, base: { 
         return finish(s, { outcome: "rejected", speech: `${note}There is nothing to ${st.action === "retry_failed" ? "retry" : "approve"} for that selection right now.`, lines: [], awaiting: null });
       }
       st.expect = p;
-      lines.push(`${st.summary}: ${describePreview(p)}`);
+      lines.push(`${st.summary}: ${describePreview(p)}${st.args.upi ? ` To ${st.args.upi}.` : ""}`);
     } else lines.push(st.summary);
     if (st.risk !== "read") sawWrite = true;
   }
@@ -210,7 +210,7 @@ async function doConfirm(s: Session, base: { llmMs: number; fastPath: boolean })
     s.planAt = Date.now();
     rec("checkpoint", plan.length);
     const text = describePreview(preview);
-    return finish(s, { outcome: "checkpoint", speech: `Before I send money: ${text} Say confirm to send, or cancel.`, lines: [`${plan[stepIndex].summary}: ${text}`], awaiting: "confirm", checkpoint: true });
+    return finish(s, { outcome: "checkpoint", speech: `Before I send money: ${text} Say confirm to send, or cancel.`, lines: [`${plan[stepIndex].summary}: ${text}${plan[stepIndex].args.upi ? ` To ${plan[stepIndex].args.upi}.` : ""}`], awaiting: "confirm", checkpoint: true });
   }
 
   s.cursor = run.cursor;
@@ -269,11 +269,13 @@ function remember(s: Session, said: string, raw: RawStep[], steps: ResolvedStep[
   const workers = ids.length > 0 && ids.length <= 3 ? ids.map((id) => db.workers.find((w) => w.id === id)?.name).filter((n): n is string => !!n) : [];
   const city = raw.map((r) => (r.args?.workers as { city?: string | null } | null | undefined)?.city).find((c) => typeof c === "string") ?? null;
   // A request to send money is never replayed as history: a follow-up must not be able to inherit it.
-  const safe = raw.filter((r) => r.action !== "approve_payouts" && r.action !== "retry_failed" && r.action !== "request_advance");
+  const safe = raw.filter((r) => r.action !== "approve_payouts" && r.action !== "retry_failed" && r.action !== "request_advance" && r.action !== "approve_advance" && r.action !== "reject_advance");
   s.history.push({ said: said.replace(/["\n]/g, " ").slice(0, 160), steps: safe, language, workers, city });
   if (s.history.length > MAX_MEMORY) s.history.shift();
 }
 
+/** "Advance" as people actually say it, in the scripts the assistant hears. */
+const SAID_ADVANCE = /advance|एडवांस|एडवान्स|ऍडव्हान्स|अग्रिम|অ্যাডভান্স|এডভান্স|অগ্রিম|ಅಡ್ವಾನ್ಸ್|ಮುಂಗಡ|அட்வான்ஸ்|முன்பணம்|అడ్వాన్స్/i;
 const REASON_LABEL: Record<string, string> = { vehicle_repair: "Bike or vehicle repair", medical: "A medical expense", family_event: "A family event", housing: "Housing", education: "Education", other: "An urgent need" };
 
 export function peekSession(id: string, userId?: string): TurnView | null {
@@ -360,7 +362,7 @@ async function handleTurnInner(input: TurnInput): Promise<TurnView> {
           ? worker
             ? "That's not something I can do for you; your employer handles it. I can tell you about your own pay and advances."
             : "I can't do that."
-          : why
+          : /\s/.test(why) // a bare code such as "cannot_process" is the model's shorthand, not something to read out
             ? `I can't do that: ${why} Ask me what I can do to see what's possible.`
             : worker
               ? "Sorry, I didn't understand. You can ask how much you've earned, check your advance, or ask for one."
@@ -388,6 +390,54 @@ async function handleTurnInner(input: TurnInput): Promise<TurnView> {
       clearPending(s);
       record(superseded ? "superseded" : "rejected");
       return finish(s, { outcome: superseded ? "superseded" : "rejected", speech: `${note}That's not something I can do for you; your employer handles it. I can tell you about your own pay and advances.`, lines: [], awaiting: null });
+    }
+
+    // Deciding an advance request. An advance is not payroll: if the word was said but a payroll decision was
+    // understood, nothing happens. This is a code check, so it doesn't depend on the model getting it right.
+    const saidAll = `${continuing && pending ? pending.utterance : ""} ${text}`;
+    const advanceSteps = resolution.steps.filter((st) => st.action === "approve_advance" || st.action === "reject_advance");
+    const stop = (speech: string) => {
+      clearPending(s);
+      record(superseded ? "superseded" : "rejected");
+      return finish(s, { outcome: superseded ? "superseded" : "rejected", speech: `${note}${speech}`, lines: [], awaiting: null });
+    };
+    if (!advanceSteps.length && SAID_ADVANCE.test(saidAll) && resolution.steps.some((st) => st.action === "approve_payouts" || st.action === "reject_payouts")) {
+      return stop("You mentioned an advance, but I understood a payroll payout, so I haven't done anything. Say, for example, approve Ravi's advance, or open the Advances page.");
+    }
+    for (const st of advanceSteps) {
+      // Refuse before showing any figures or asking for a confirmation.
+      if (!allowedFor(s.ctx.role, st)) return stop("Only the owner can approve or reject an advance.");
+      const verb = st.action === "approve_advance" ? "approve" : "reject";
+      const ids = new Set((st.args.workerIds as string[] | undefined) ?? []);
+      const waiting = staffAdvances().filter((a) => a.status === "pending_review" && ids.has(a.workerId));
+      if (!waiting.length) return stop(`There is no advance request waiting that I can ${verb} for that selection.`);
+      if (waiting.length > 1) {
+        s.state = "clarifying";
+        s.utterance = continuing && pending ? pending.utterance : text;
+        s.partial = plan.steps.map((p) => (p.action === st.action ? { ...p, args: { ...p.args, workers: null } } : p));
+        const list = waiting.slice(0, 4).map((a) => `${a.worker?.name ?? "Unknown"} ₹${a.amount}`).join(", ");
+        const q = `${waiting.length} advance requests are waiting: ${list}${waiting.length > 4 ? " and more" : ""}. Whose should I ${verb}?`;
+        s.question = await localize(q, s.language);
+        record("clarified");
+        return finish(s, { outcome: "clarified", speech: `${note}${q}`, lines: [s.question], awaiting: "reply" });
+      }
+      const a = waiting[0];
+      const name = a.worker?.name ?? "this worker";
+      st.args.advanceId = a.id;
+      if (st.action === "reject_advance") {
+        st.summary = `Reject ${name}'s advance request of ₹${a.amount}`;
+        continue;
+      }
+      const approved = typeof st.args.amount === "number" ? st.args.amount : a.amount;
+      const heard = detectAmounts(saidAll);
+      // A number that was said but isn't the number about to be sent is never ignored.
+      if (heard.length && !heard.includes(approved)) return stop(`I heard ₹${heard[0]}, but ${name}'s request is for ₹${a.amount}. Say approve, with the amount you mean.`);
+      if (!Number.isInteger(approved) || approved < 1 || approved > a.amount) return stop(`${name} asked for ₹${a.amount}. I can approve that or less, in whole rupees.`);
+      const check = eligibilityFor(a.workerId, { amount: approved, excludeId: a.id });
+      if (check.blocks.length) return stop(`I can't approve it: ${check.blocks[0]}`);
+      st.args.approvedAmount = approved;
+      st.args.upi = getViewDb().workers.find((w) => w.id === a.workerId)?.payoutUpi || null; // shown on screen, never spoken
+      st.summary = `Approve ${name}'s emergency advance of ₹${approved}${approved !== a.amount ? ` (they asked for ₹${a.amount})` : ""}, to be deducted from their next payroll`;
     }
 
     // An advance request: check what was actually said, check eligibility now, and attach what the service needs.

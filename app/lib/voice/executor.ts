@@ -16,7 +16,7 @@ import {
 import { formatMoney as money } from "@/app/lib/merchant/format";
 import { runFundingAgent } from "@/app/lib/cashfree/mcp/agent";
 import { runManagerAgent } from "@/app/lib/server/advance-agent";
-import { submitAdvance } from "@/app/lib/server/advance-service";
+import { advances, approveAdvance, rejectAdvance, submitAdvance } from "@/app/lib/server/advance-service";
 import { roleMayUse } from "./catalog";
 import { chatReply, explainTopic } from "./knowledge";
 import { answerQuery } from "./queries";
@@ -61,6 +61,14 @@ function targets(step: ResolvedStep): string[] | null {
 export function previewMoney(step: ResolvedStep): MoneyPreview | null {
   if (step.risk !== "money") return null;
   const db = getDb();
+  if (step.action === "approve_advance") {
+    // Pinned to one request: if it was decided or cancelled meanwhile, there is nothing to move.
+    const a = advances().find((x) => x.id === step.args.advanceId && x.status === "pending_review");
+    if (!a) return { count: 0, totalInr: 0, names: [], skipped: [] };
+    const w = db.workers.find((x) => x.id === a.workerId);
+    const name = w?.name ?? "Unknown";
+    return { count: 1, totalInr: Number(step.args.approvedAmount), names: [name], skipped: w?.payoutUpi ? [] : [name] };
+  }
   const ids = targets(step);
   if (!ids) return { count: 0, totalInr: 0, names: [], skipped: [] };
   const nameOf = (id: string) => db.workers.find((w) => w.id === id)?.name ?? "Unknown";
@@ -92,7 +100,7 @@ async function runStep(step: ResolvedStep, dryRun: boolean, ctx: VoiceCtx): Prom
   const db = getDb();
   const a = step.args;
   const date = (a.date as string | null) ?? getToday();
-  const NO_TARGETS = ["add_worker", "set_rule", "set_tier", "remove_tier", "navigate", "sync_status", "chat", "explain", "request_advance", "check_funding"];
+  const NO_TARGETS = ["add_worker", "set_rule", "set_tier", "remove_tier", "navigate", "sync_status", "chat", "explain", "request_advance", "check_funding", "approve_advance", "reject_advance"];
   // A worker's questions are always about themselves, so they never resolve other people.
   const ids = NO_TARGETS.includes(step.action) || ctx.role === "worker" ? [] : targets(step);
   if (ids === null) return { ok: false, message: "I couldn't work out which workers you meant." };
@@ -147,6 +155,30 @@ async function runStep(step: ResolvedStep, dryRun: boolean, ctx: VoiceCtx): Prom
         ok: true,
         message: `Approved ${count(pending.length, "payout")} (${formatMoney(pending.reduce((s, p) => s + p.amount, 0))}) and sent them to Cashfree.${failedNow.length ? ` ${count(failedNow.length, "payment")} failed straight away: ${failedNow.map((t) => nameOf(t.workerId)).join(", ")}.` : ""}`,
       };
+    }
+
+    case "approve_advance":
+    case "reject_advance": {
+      const a = advances().find((x) => x.id === step.args.advanceId && x.status === "pending_review");
+      if (!a) return { ok: true, skipped: true, message: "That advance request is no longer waiting, so nothing was changed." };
+      const name = nameOf(a.workerId);
+      const approving = step.action === "approve_advance";
+      const amount = Number(step.args.approvedAmount ?? a.amount);
+      if (dryRun) return { ok: true, message: `Would have ${approving ? `approved ${money(amount)} for` : "rejected the request of"} ${name}.` };
+      // The same functions the Advances page buttons call, recorded under the person who is speaking.
+      const actor = { id: `${role}:${ctx.userId ?? "voice"}`, name: ctx.name || "Owner" };
+      try {
+        if (!approving) {
+          rejectAdvance(a.id, actor, "");
+          return { ok: true, message: `Rejected ${name}'s advance request. Nothing was sent.` };
+        }
+        await approveAdvance(a.id, actor, { approvedAmount: amount, note: "Approved by voice" });
+      } catch (e) {
+        return { ok: false, message: failMessage(e) };
+      }
+      const now = advances().find((x) => x.id === a.id);
+      if (now?.status === "payment_failed") return { ok: false, message: `Approved, but the payment to ${name} failed: ${now.statusNote ?? "see the Advances page."}` };
+      return { ok: true, message: now?.status === "paid" ? `${money(amount)} was paid to ${name}.` : `Sent ${money(amount)} for ${name} to Cashfree. It counts as paid only when Cashfree confirms it.` };
     }
 
     case "retry_failed": {
@@ -282,6 +314,8 @@ export interface VoiceCtx {
   role: VoiceRole;
   name: string;
   workerId: string | null;
+  /** For the decision record and audit log. */
+  userId?: string;
 }
 
 /** Supervisors record the day's work and prepare payouts; everything else is owner-only. */
