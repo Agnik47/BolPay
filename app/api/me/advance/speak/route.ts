@@ -1,5 +1,5 @@
 import { connection, NextResponse } from "next/server";
-import { SarvamError, synthesizeSpeech, UnsupportedSpeechLanguageError } from "@/app/lib/sarvam/client";
+import { speechStatus, synthesizeSpeech, ttsConfigured, UnsupportedSpeechLanguageError } from "@/app/lib/speech";
 import { guard, rateLimit, requireApiRole } from "@/app/lib/server/http";
 import { ServiceError } from "@/app/lib/server/service";
 
@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   const denied = await guard(["worker"]);
   if (denied) return denied;
   await connection();
-  if (!process.env.SARVAM_API_KEY) return NextResponse.json({ error: "Text-to-speech is not configured." }, { status: 503 });
+  if (!ttsConfigured()) return NextResponse.json({ error: "Text-to-speech is not configured." }, { status: 503 });
   try {
     const session = await requireApiRole(["worker"]);
     rateLimit(`advance-speak:${session.userId}`, 20, 10 * 60_000);
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   } catch (err) {
     if (err instanceof ServiceError) return NextResponse.json({ error: err.message }, { status: err.status });
     if (err instanceof UnsupportedSpeechLanguageError) return NextResponse.json({ error: "Spoken replies aren't available in this language." }, { status: 422 });
-    if (err instanceof SarvamError && err.status === 429) return NextResponse.json({ error: "Text-to-speech is busy." }, { status: 429 });
+    if (speechStatus(err) === 429) return NextResponse.json({ error: "Text-to-speech is busy." }, { status: 429 });
     console.error("advance speak failed", err instanceof Error ? err.message : err);
     return NextResponse.json({ error: "Could not generate speech." }, { status: 502 });
   }

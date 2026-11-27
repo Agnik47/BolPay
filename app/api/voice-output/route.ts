@@ -1,21 +1,21 @@
 import { connection, NextResponse } from "next/server";
-import { SarvamError, synthesizeSpeech, UnsupportedSpeechLanguageError } from "@/app/lib/sarvam/client";
+import { speechStatus, synthesizeSpeech, ttsConfigured, ttsName, UnsupportedSpeechLanguageError } from "@/app/lib/speech";
 import { guard, STAFF } from "@/app/lib/server/http";
 
 const MAX_CHARS = 400;
 
 /**
- * POST /api/voice-output  { text: string, language?: string }  ->  audio (WAV)
- * Reads a short assistant reply aloud with Sarvam text-to-speech. `language` is the planner's ISO code
- * and only a hint: the script of the text decides. 422 means there is no voice for the language (Urdu):
- * the reply is shown as text only.
+ * POST /api/voice-output  { text: string, language?: string }  ->  audio (WAV, or MP3 from ElevenLabs)
+ * Reads a short assistant reply aloud. ElevenLabs unless SPEECH_TTS=sarvam. `language` is the
+ * planner's ISO code and only a hint: the script of the text decides. 422 means Sarvam has no voice for the
+ * language (Urdu): the reply is shown as text only.
  * Callers should only send reply text, never recipient details (emails, bank info).
  */
 export async function POST(req: Request) {
   const denied = await guard(STAFF);
   if (denied) return denied;
   await connection();
-  if (!process.env.SARVAM_API_KEY) {
+  if (!ttsConfigured()) {
     return NextResponse.json({ error: "Text-to-speech is not configured." }, { status: 503 });
   }
 
@@ -38,8 +38,8 @@ export async function POST(req: Request) {
     if (err instanceof UnsupportedSpeechLanguageError) {
       return NextResponse.json({ error: "Spoken replies aren't available in this language." }, { status: 422 });
     }
-    console.error("Sarvam TTS failed", err instanceof Error ? err.message : err);
-    if (err instanceof SarvamError && err.status === 429) {
+    console.error(`${ttsName()} TTS failed`, err instanceof Error ? err.message : err);
+    if (speechStatus(err) === 429) {
       return NextResponse.json({ error: "Text-to-speech is busy." }, { status: 429 });
     }
     return NextResponse.json({ error: "Could not generate speech." }, { status: 502 });
