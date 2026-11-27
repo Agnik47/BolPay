@@ -5,7 +5,8 @@ import { IconClose, IconMic } from "../icons";
 import { api, JSON_HEADERS, LANGS, PICKER, type Preview } from "./advance-shared";
 import { playWithLevel, useMicRecorder } from "./useVoiceAudio";
 import { VoiceBackdrop } from "./VoiceBackdrop";
-import { VoiceOrb, type OrbState } from "./VoiceOrb";
+import type { OrbState } from "./VoiceOrb";
+import { VoiceWave } from "./VoiceWave";
 
 interface Props {
   /** "listen" captures a request; "respond" only speaks a reply the server has already saved. */
@@ -192,7 +193,7 @@ export function VoiceStage({ mode, workerName, language, onLanguage, respond, on
 
       {/* Orb */}
       <div className="relative min-h-0 flex-1">
-        <VoiceOrb state={state} levelRef={levelRef} className="absolute inset-0 size-full" />
+        <VoiceWave state={state} levelRef={levelRef} className="absolute inset-0 size-full" />
         {recording && <span className="absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/30 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur"><span className="size-2 animate-pulse rounded-full bg-rose-500" />Recording</span>}
       </div>
 
